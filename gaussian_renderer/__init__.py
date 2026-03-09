@@ -26,58 +26,83 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
     screenspace_points = torch.zeros_like(pc.get_xyz, dtype=pc.get_xyz.dtype, requires_grad=True, device="cuda") + 0
     try:
         screenspace_points.retain_grad()
-    except Exception:
+    except:
         pass
 
     # Set up rasterization configuration
     tanfovx = math.tan(viewpoint_camera.FoVx * 0.5)
     tanfovy = math.tan(viewpoint_camera.FoVy * 0.5)
+    # print("clamp value:", tanfovx, tanfovy)
+    # print("clamp value:", viewpoint_camera.FoVx, viewpoint_camera.FoVy)
 
-    # if viewpoint_camera.render_model==0:
-    #     raster_settings = GaussianRasterizationSettings(
-    #         image_height=viewpoint_camera.image_height,
-    #         image_width=viewpoint_camera.image_width,
-    #         tanfovx=tanfovx,
-    #         tanfovy=tanfovy,
-    #         bg=bg_color,
-    #         scale_modifier=scaling_modifier,
-    #         viewmatrix=viewpoint_camera.world_view_transform,
-    #         mirror_transformed_tan_theta=viewpoint_camera.mirror_transformed_tan_theta.cuda(),
-    #         mirror_transformed_tan_phi=viewpoint_camera.mirror_transformed_tan_phi.cuda(),
-    #         tan_theta=viewpoint_camera.tan_theta.cuda(),
-    #         tan_phi=viewpoint_camera.tan_phi.cuda(),
-    #         sh_degree=pc.active_sh_degree,
-    #         campos=viewpoint_camera.camera_center,
-    #         prefiltered=False,
-    #         debug=pipe.debug,
-    #         antialiasing=pipe.antialiasing
-    #     )
+    # if viewpoint_camera.render_camera_model=='BEAP':
+    #     image_height = int(viewpoint_camera.tan_phi.shape[0])
+    #     image_width = int(viewpoint_camera.tan_theta.shape[0])
+    #     render_model = 0
     # else:
-    raster_settings = GaussianRasterizationSettings(
-        image_height=viewpoint_camera.image_height,
-        image_width=viewpoint_camera.image_width,
-        tanfovx=tanfovx,
-        tanfovy=tanfovy,
-        bg=bg_color,
-        scale_modifier=scaling_modifier,
-        viewmatrix=viewpoint_camera.world_view_transform,
-        mirror_transformed_tan_theta=viewpoint_camera.mirror_transformed_tan_theta.cuda(),
-        mirror_transformed_tan_phi=viewpoint_camera.mirror_transformed_tan_phi.cuda(),
-        tan_theta=viewpoint_camera.tan_theta.cuda(),
-        tan_phi=viewpoint_camera.tan_phi.cuda(),
-        focal_x=float(viewpoint_camera.focal_x or 0.0),
-        focal_y=float(viewpoint_camera.focal_y or 0.0),
-        principal_x=float(viewpoint_camera.principal_x or 0.0),
-        principal_y=float(viewpoint_camera.principal_y or 0.0),
-        distortion_coeffs=viewpoint_camera.distortion_coeffs.cuda() if viewpoint_camera.render_model == 1 else torch.empty(0, device="cuda"),
-        raymap=viewpoint_camera.raymap.cuda() if viewpoint_camera.render_model == 1 else torch.empty(0, device="cuda"),
-        sh_degree=pc.active_sh_degree,
-        campos=viewpoint_camera.camera_center,
-        prefiltered=False,
-        debug=pipe.debug,
-        antialiasing=pipe.antialiasing,
-        render_mode=viewpoint_camera.render_model
-    )
+    #     image_height = int(viewpoint_camera.raymap.shape[0])
+    #     image_width = int(viewpoint_camera.raymap.shape[1])
+    #     render_model = 1
+
+    # print(viewpoint_camera.render_model)
+    if viewpoint_camera.render_model==0:
+        raster_settings = GaussianRasterizationSettings(
+            image_height=viewpoint_camera.image_height,
+            image_width=viewpoint_camera.image_width,
+            tanfovx=tanfovx,
+            tanfovy=tanfovy,
+            bg=bg_color,
+            scale_modifier=scaling_modifier,
+            viewmatrix=viewpoint_camera.world_view_transform,
+            # projmatrix=viewpoint_camera.full_proj_transform,
+            omni_tan_theta=viewpoint_camera.omni_tan_theta.cuda(),
+            omni_tan_phi=viewpoint_camera.omni_tan_phi.cuda(),
+            tan_theta=viewpoint_camera.tan_theta.cuda(),
+            tan_phi=viewpoint_camera.tan_phi.cuda(), 
+
+            # focal_x=viewpoint_camera.focal_x, # for kb
+            # focal_y=viewpoint_camera.focal_y,
+            # principal_x=viewpoint_camera.principal_x,
+            # principal_y=viewpoint_camera.principal_y,
+            # distortion_coeffs=viewpoint_camera.distortion_coeffs.cuda(),
+
+            # raymap=viewpoint_camera.raymap.cuda(), # for kb, 360
+
+            sh_degree=pc.active_sh_degree,
+            campos=viewpoint_camera.camera_center,
+            prefiltered=False,
+            debug=pipe.debug,
+            antialiasing=pipe.antialiasing
+        )
+    else:
+        raster_settings = GaussianRasterizationSettings(
+            image_height=viewpoint_camera.image_height,
+            image_width=viewpoint_camera.image_width,
+            tanfovx=tanfovx,
+            tanfovy=tanfovy,
+            bg=bg_color,
+            scale_modifier=scaling_modifier,
+            viewmatrix=viewpoint_camera.world_view_transform,
+            # projmatrix=viewpoint_camera.full_proj_transform,
+            omni_tan_theta=viewpoint_camera.omni_tan_theta.cuda(), # for ray-splatting 360
+            omni_tan_phi=viewpoint_camera.omni_tan_phi.cuda(), # for ray-splatting
+            tan_theta=viewpoint_camera.tan_theta.cuda(), # for ray-splatting
+            tan_phi=viewpoint_camera.tan_phi.cuda(), # for ray-splatting
+
+            focal_x=viewpoint_camera.focal_x, # for kb
+            focal_y=viewpoint_camera.focal_y,
+            principal_x=viewpoint_camera.principal_x,
+            principal_y=viewpoint_camera.principal_y,
+            distortion_coeffs=viewpoint_camera.distortion_coeffs.cuda(),
+
+            raymap=viewpoint_camera.raymap.cuda(), # for kb, 360
+
+            sh_degree=pc.active_sh_degree,
+            campos=viewpoint_camera.camera_center,
+            prefiltered=False,
+            debug=pipe.debug,
+            antialiasing=pipe.antialiasing
+        )
 
     rasterizer = GaussianRasterizer(raster_settings=raster_settings)
 
@@ -94,6 +119,7 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
     if pipe.compute_cov3D_python:
         print("We use the inverse-sigma S^(-1)Rt for rasterizer forwards and backwards; precomputing cov3D is disabled.")
         raise NotImplementedError
+        cov3D_precomp = pc.get_covariance(scaling_modifier)
     else:
         scales = pc.get_scaling
         rotations = pc.get_rotation
@@ -114,8 +140,9 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
     else:
         colors_precomp = override_color
 
-    # Rasterize visible Gaussians to image, obtain their radii (on screen).
+    # Rasterize visible Gaussians to image, obtain their radii (on screen). 
     rendered_image, radii, depth_image, kernel_times, ranges = rasterizer(
+    # rendered_image, radii, depth_image = rasterizer(
         means3D = means3D,
         means2D = means2D,
         shs = shs,
@@ -123,7 +150,10 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
         opacities = opacity,
         scales = scales,
         rotations = rotations)
+        # cov3D_precomp = cov3D_precomp)
     torch.cuda.synchronize()
+    
+    # print("kernel times", kernel_times)
     
     # Apply exposure to rendered image (training only)
     if use_trained_exp:

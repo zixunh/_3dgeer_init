@@ -42,13 +42,13 @@ RasterizeGaussiansCUDA(
 	const torch::Tensor& rotations,
 	const float scale_modifier,
 	const torch::Tensor& viewmatrix,
-	const torch::Tensor& mirror_transformed_tan_theta, 
-	const torch::Tensor& mirror_transformed_tan_phi, 
+	const torch::Tensor& omni_tan_theta, 
+	const torch::Tensor& omni_tan_phi, 
 	const torch::Tensor& tan_theta, 
 	const torch::Tensor& tan_phi, 
 	const float focal_x, float focal_y, 
 	const float principal_x, float principal_y,
-	const torch::Tensor& distortion_coeffs,
+	const torch::Tensor& kb_coeff,
 	const torch::Tensor& raymap,
 	const float tan_fovx, 
 	const float tan_fovy,
@@ -59,7 +59,6 @@ RasterizeGaussiansCUDA(
 	const torch::Tensor& campos,
 	const bool prefiltered,
 	const bool antialiasing,
-	const int mode,
 	const bool debug)
 {
   if (means3D.ndimension() != 2 || means3D.size(1) != 3) {
@@ -89,7 +88,7 @@ RasterizeGaussiansCUDA(
 
   torch::Tensor xmap = torch::empty({image_width * image_height}, raymap.options().dtype(torch::kFloat32));
   torch::Tensor ymap = torch::empty({image_width * image_height}, raymap.options().dtype(torch::kFloat32));
-
+  
   torch::Device device(torch::kCUDA);
   torch::TensorOptions options(torch::kByte);
   torch::Tensor geomBuffer = torch::empty({0}, options.device(device));
@@ -123,14 +122,14 @@ RasterizeGaussiansCUDA(
 		scale_modifier,
 		rotations.contiguous().data_ptr<float>(),
 		viewmatrix.contiguous().data<float>(), 
-		mirror_transformed_tan_theta.contiguous().data<float>(),
-		mirror_transformed_tan_phi.contiguous().data<float>(),
+		omni_tan_theta.contiguous().data<float>(),
+		omni_tan_phi.contiguous().data<float>(),
 		tan_theta.contiguous().data<float>(), 
 		tan_phi.contiguous().data<float>(),
 		campos.contiguous().data<float>(),
 		focal_x, focal_y, 
 		principal_x, principal_y,
-		distortion_coeffs.contiguous().data<float>(),
+		kb_coeff.contiguous().data<float>(),
 		raymap.contiguous().data<float>(),
 		xmap.contiguous().data<float>(),
 		ymap.contiguous().data<float>(),
@@ -141,7 +140,6 @@ RasterizeGaussiansCUDA(
 		out_color.contiguous().data<float>(),
 		out_invdepthptr,
 		antialiasing,
-		mode,
 		radii.contiguous().data<int>(),
 		range_len.contiguous().data<int>(), // ranges for each tile
 		debug);

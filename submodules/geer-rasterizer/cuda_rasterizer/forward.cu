@@ -69,7 +69,7 @@ __device__ bool computeCov3D(const glm::vec3 scale, const float mod, const glm::
 	return true;
 }
 
-__forceinline__ __device__ void searchsorted_pbf(
+__forceinline__ __device__ void searchsorted_aabb(
     const float* ref_u, int u_span,
     const float* ref_v, int v_span,
     const float* uv_values,
@@ -78,7 +78,7 @@ __forceinline__ __device__ void searchsorted_pbf(
     thrust::lower_bound(thrust::device, ref_v, ref_v + v_span, uv_values + 2, uv_values + 4, v_indices);
 }
 
-__forceinline__ __device__ void invinterpolated_pbf(
+__forceinline__ __device__ void invinterpolated_aabb(
 	const int W, int H,
 	const float focal_x, float focal_y, 
 	const float principal_x, float principal_y, 
@@ -147,10 +147,6 @@ __forceinline__ __device__ void invinterpolated_pbf(
 	v_indices[1] = fminf(fmaxf((int)0, v_indices[1]), (int)(H-1));
 }
 
-// Compute antialiasing variance (h_var) and pack into h_opacity:
-//   h_opacity->x = h_var  (small isotropic variance added to each axis for anti-aliasing)
-//   h_opacity->y = antialiasing-scaled Gaussian opacity
-// Returns false if the resulting opacity falls below the visibility threshold.
 __device__ bool omni_hvar(const glm::vec3 scale, const float mod, const float opacity, float2* h_opacity, bool antialiasing)
 {
 	float h_var = 1e-7f;
@@ -169,7 +165,7 @@ __device__ bool omni_hvar(const glm::vec3 scale, const float mod, const float op
 	return true;
 }
 
-__device__ void mirror_transform_pbf(const float4& m, const float xi, float* result) {
+__device__ void omni_map_xy(const float4& m, const float xi, float* result) {
 	float _m0 = xi * sqrtf(1 + m.x * m.x);
 	float _m1 = xi * sqrtf(1 + m.y * m.y);
 	float _m2 = xi * sqrtf(1 + m.z * m.z);
@@ -184,7 +180,7 @@ __device__ void mirror_transform_pbf(const float4& m, const float xi, float* res
 	result[7] = m.w / (1 - _m3);
 }
 
-__device__ void mirror_transform_fov(const float tan_fovx, const float tan_fovy, const float xi, float* result) {
+__device__ void omni_map_fov(const float tan_fovx, const float tan_fovy, const float xi, float* result) {
 	float _tan_fovx = xi * sqrtf(1 + tan_fovx * tan_fovx);
 	float _tan_fovy = xi * sqrtf(1 + tan_fovy * tan_fovy);
 	result[0] = tan_fovx / (1 + _tan_fovx);
@@ -193,22 +189,15 @@ __device__ void mirror_transform_fov(const float tan_fovx, const float tan_fovy,
 	result[3] = -result[2];
 }
 
-__forceinline__ __device__ float mirror_transform_tan(const float m, const float z, const float xi) {
+__forceinline__ __device__ float omni_map_float(const float m, const float z, const float xi) {
     if (xi == 0.0f) {
         return m;
     }
 	return m / (1 + xi * (z / fabsf(z)) * sqrtf(1 + m * m));
 }
 
-// Compute the Particle Bounding Frustum (PBF) for a 3D Gaussian in ray-direction
-// tangent space.  The PBF is a tight axis-aligned bounding box (AABB) on the set
-// of rays that intersect the Gaussian's λ-sigma ellipsoid.  It is defined as
-//   pbf = {tan_theta_min, tan_theta_max, tan_phi_min, tan_phi_max}
-// and maps directly to pixel ranges via the BEAP reference arrays or the KB grid.
-// See 3DGEER paper (https://openreview.net/pdf?id=4voMNlRWI7), Sec. D / Eq. 10.
-// Returns false if the Gaussian is degenerate or entirely outside the frustum.
 __device__ bool computePBF(
-    const glm::vec3 scale, const float mod, const glm::mat3 R_view, const float3 p_view, const float lambda, float4& pbf, const float tan_fovx, const float tan_fovy, float h_var)
+    const glm::vec3 scale, const float mod, const glm::mat3 R_view, const float3 p_view, const float lambda, float4& aabb, const float tan_fovx, const float tan_fovy, float h_var)
 {
     float lambda_sq = sq(lambda);
 	float cov3d[6];
@@ -232,7 +221,7 @@ __device__ bool computePBF(
     half_extend[0] = sqrtf(Tc_02 * Tc_02 - Tc_22 * Tc_00) / fabsf(Tc_22);
     half_extend[1] = sqrtf(Tc_12 * Tc_12 - Tc_22 * Tc_11) / fabsf(Tc_22);
 
-	bool neg = false;
+	float neg = false;
 	if (isnan(half_extend[0]))
 	{ 
 		half_extend[0] = fmaxf(fabsf(center[0] - tan_fovx), fabsf(center[0] + tan_fovx));
@@ -248,32 +237,32 @@ __device__ bool computePBF(
 	float _bottom = center[1] - half_extend[1];
 	float _upper = center[1] + half_extend[1];
 
-    pbf.x = _left;
-    pbf.y = _right;
-	pbf.z = _bottom;
-    pbf.w = _upper;
+    aabb.x = _left;
+    aabb.y = _right;
+	aabb.z = _bottom;
+    aabb.w = _upper;
 
 	// If half-extend is negative, return and do not compute the omni
 	if (neg) return;
 
 	// Omni mapping for AABB
 	float xi = 1.0;
-    float mirror_transformed_pbf[8];
-	mirror_transform_pbf(pbf, xi, mirror_transformed_pbf);
+    float aabb_omni[8];
+	omni_map_xy(aabb, xi, aabb_omni);
 
     const float eps = 1e-6f;
     float depth = p_view.z;
     depth = (fabsf(depth) < eps) ? eps : depth; // Prevent division by zero
     float gaus_center_omni[2] = {
-        mirror_transform_tan(p_view.x / depth, depth, xi),
-        mirror_transform_tan(p_view.y / depth, depth, xi)
+        omni_map_float(p_view.x / depth, depth, xi),
+        omni_map_float(p_view.y / depth, depth, xi)
     };
 
     float fov_omni[4];
-    mirror_transform_fov(tan_fovx, tan_fovy, xi, fov_omni);
+    omni_map_fov(tan_fovx, tan_fovy, xi, fov_omni);
 
-    float aa_omni[4] = { mirror_transformed_pbf[0], mirror_transformed_pbf[1], mirror_transformed_pbf[2], mirror_transformed_pbf[3] };
-	float bb_omni[4] = { mirror_transformed_pbf[4], mirror_transformed_pbf[5], mirror_transformed_pbf[6], mirror_transformed_pbf[7] };
+    float aa_omni[4] = { aabb_omni[0], aabb_omni[1], aabb_omni[2], aabb_omni[3] };
+	float bb_omni[4] = { aabb_omni[4], aabb_omni[5], aabb_omni[6], aabb_omni[7] };
 	float a_min = -INFINITY;
 	float a_max = INFINITY;
 	float b_min = -INFINITY;
@@ -314,33 +303,33 @@ __device__ bool computePBF(
     if (b_max < fov_omni[3]) b_max_idx = 4;
     if (b_max > fov_omni[2]) b_max_idx = 5;
 
-    if (a_min_idx == 4) pbf.x = -tan_fovx;
-    else if (a_min_idx == 5) pbf.x = tan_fovx;
-    else if (a_min_idx == 0) pbf.x = _left;
-    else if (a_min_idx == 1) pbf.x = _left;
-    else if (a_min_idx == 2) pbf.x = _right;
-    else if (a_min_idx == 3) pbf.x = _right;
+    if (a_min_idx == 4) aabb.x = -tan_fovx;
+    else if (a_min_idx == 5) aabb.x = tan_fovx;
+    else if (a_min_idx == 0) aabb.x = _left;
+    else if (a_min_idx == 1) aabb.x = _left;
+    else if (a_min_idx == 2) aabb.x = _right;
+    else if (a_min_idx == 3) aabb.x = _right;
     
-    if (a_max_idx == 5) pbf.y = tan_fovx;
-    else if (a_max_idx == 4) pbf.y = -tan_fovx;
-    else if (a_max_idx == 0) pbf.y = _left;
-    else if (a_max_idx == 1) pbf.y = _left;
-    else if (a_max_idx == 2) pbf.y = _right;
-    else if (a_max_idx == 3) pbf.y = _right;
+    if (a_max_idx == 5) aabb.y = tan_fovx;
+    else if (a_max_idx == 4) aabb.y = -tan_fovx;
+    else if (a_max_idx == 0) aabb.y = _left;
+    else if (a_max_idx == 1) aabb.y = _left;
+    else if (a_max_idx == 2) aabb.y = _right;
+    else if (a_max_idx == 3) aabb.y = _right;
 
-    if (b_min_idx == 4) pbf.z = -tan_fovy;
-    else if (b_min_idx == 5) pbf.z = tan_fovy;
-    else if (b_min_idx == 0) pbf.z = _bottom;
-    else if (b_min_idx == 1) pbf.z = _bottom;
-    else if (b_min_idx == 2) pbf.z = _upper;
-    else if (b_min_idx == 3) pbf.z = _upper;
+    if (b_min_idx == 4) aabb.z = -tan_fovy;
+    else if (b_min_idx == 5) aabb.z = tan_fovy;
+    else if (b_min_idx == 0) aabb.z = _bottom;
+    else if (b_min_idx == 1) aabb.z = _bottom;
+    else if (b_min_idx == 2) aabb.z = _upper;
+    else if (b_min_idx == 3) aabb.z = _upper;
 
-    if (b_max_idx == 5) pbf.w = tan_fovy;
-    else if (b_max_idx == 4) pbf.w = -tan_fovy;
-    else if (b_max_idx == 0) pbf.w = _bottom;
-    else if (b_max_idx == 1) pbf.w = _bottom;
-    else if (b_max_idx == 2) pbf.w = _upper;
-    else if (b_max_idx == 3) pbf.w = _upper;
+    if (b_max_idx == 5) aabb.w = tan_fovy;
+    else if (b_max_idx == 4) aabb.w = -tan_fovy;
+    else if (b_max_idx == 0) aabb.w = _bottom;
+    else if (b_max_idx == 1) aabb.w = _bottom;
+    else if (b_max_idx == 2) aabb.w = _upper;
+    else if (b_max_idx == 3) aabb.w = _upper;
 
     return true;
 }
@@ -415,17 +404,17 @@ __global__ void preprocessCUDA(int P, int D, int M,
 	bool* clamped,
 	const float* colors_precomp,
 	const float* viewmatrix,
-	const float* mirror_transformed_tan_x, // tan_theta of mirror transformed PBF 
-	const float* mirror_transformed_tan_y, // tan_phi of mirror transformed PBF 
+	const float* ref_tan_x, // tan_theta of mirror transformed PBF 
+	const float* ref_tan_y, // tan_phi of mirror transformed PBF 
 	const glm::vec3* cam_pos,
 	const int W, int H,
 	const float tan_fovx, float tan_fovy,
 	const float focal_x, float focal_y,
 	const float principal_x, float principal_y,
-	const float* distortion_coeffs, // KB fisheye distortion coefficients (k1,k2,k3,k4 in polynomial angle model)
+	const float* kb_coeff,
 	int* radii,
-	int* pbf_id,
-	float4* pbf_tan,
+	int* aabb_id,
+	float4* beap_xxyy,
 	const float* xmap, 
 	const float* ymap, 
 	float3* points_xyz_view,
@@ -436,8 +425,7 @@ __global__ void preprocessCUDA(int P, int D, int M,
 	const dim3 grid,
 	uint32_t* tiles_touched,
 	bool prefiltered,
-	bool antialiasing,
-	int mode)
+	bool antialiasing)
 {
 	auto idx = cg::this_grid().thread_rank();
 	if (idx >= P)
@@ -446,10 +434,10 @@ __global__ void preprocessCUDA(int P, int D, int M,
 	// Initialize radius and touched tiles to 0. If this isn't changed,
 	// this Gaussian will not be processed further.
 	radii[idx] = 0;
-	pbf_id[idx * 4] = 0; 
-	pbf_id[idx * 4 + 1] = 0;
-	pbf_id[idx * 4 + 2] = 0; 
-	pbf_id[idx * 4 + 3] = 0; 
+	aabb_id[idx * 4] = 0; 
+	aabb_id[idx * 4 + 1] = 0;
+	aabb_id[idx * 4 + 2] = 0; 
+	aabb_id[idx * 4 + 3] = 0; 
 
 	tiles_touched[idx] = 0;
 
@@ -480,30 +468,25 @@ __global__ void preprocessCUDA(int P, int D, int M,
 
 	int _aa[2];
 	int _bb[2];
-	if (mode == 0)
+	if (xmap == nullptr)
 	{
 		// Convert PBF into BEAP space;
-		searchsorted_pbf(mirror_transformed_tan_x, W, mirror_transformed_tan_y, H, (float*)(&tan_xxyy), _aa, _bb);
-	} else if (mode == 1) {
-		// Bound PBF into KB imaging space;
-		const float4* kb_params4 = reinterpret_cast<const float4*>(distortion_coeffs);
-		const float4 kb_params = kb_params4[0];
-		invinterpolated_pbf(W, H, focal_x, focal_y, principal_x, principal_y, kb_params, tan_xxyy, _aa, _bb);
+		searchsorted_aabb(ref_tan_x, W, ref_tan_y, H, (float*)(&tan_xxyy), _aa, _bb);
 	} else {
-		_aa[0] = (int)fmaxf(-(float)W, fminf(2.0f * W, floorf(focal_x * tan_xxyy.x + W / 2.0f - 1.0f)));
-		_aa[1] = (int)fmaxf(-(float)W, fminf(2.0f * W, ceilf( focal_x * tan_xxyy.y + W / 2.0f + 1.0f)));
-		_bb[0] = (int)fmaxf(-(float)H, fminf(2.0f * H, floorf(focal_y * tan_xxyy.z + H / 2.0f - 1.0f)));
-		_bb[1] = (int)fmaxf(-(float)H, fminf(2.0f * H, ceilf( focal_y * tan_xxyy.w + H / 2.0f + 1.0f)));
+		// Bound PBF into KB imaging space;
+		const float4* kb_params4 = reinterpret_cast<const float4*>(kb_coeff);
+		const float4 kb_params = kb_params4[0];
+		invinterpolated_aabb(W, H, focal_x, focal_y, principal_x, principal_y, kb_params, tan_xxyy, _aa, _bb);
 	}
-	int4 _pbf = {_aa[0], _aa[1], _bb[0], _bb[1]};
-	if ((_pbf.y - _pbf.x) * (_pbf.w - _pbf.z) == 0)
+	int4 _aabb = {_aa[0], _aa[1], _bb[0], _bb[1]};
+	if ((_aabb.y - _aabb.x) * (_aabb.w - _aabb.z) == 0)
 		return;
 
-	int4 screen_grid_aligned_pbf = _pbf;
-	float2 point_image = { (screen_grid_aligned_pbf.y + screen_grid_aligned_pbf.x)/2.f, (screen_grid_aligned_pbf.w + screen_grid_aligned_pbf.z)/2.f };
+	int4 my_aabb = _aabb;
+	float2 point_image = { (my_aabb.y + my_aabb.x)/2.f, (my_aabb.w + my_aabb.z)/2.f };
 
 	uint2 rect_min, rect_max;
-	getRect2(screen_grid_aligned_pbf, rect_min, rect_max, grid);
+	getRect2(my_aabb, rect_min, rect_max, grid);
 	if ((rect_max.x - rect_min.x) * (rect_max.y - rect_min.y) == 0)
 		return;
 	int my_radius = max(rect_max.x - rect_min.x, rect_max.y - rect_min.y);
@@ -522,17 +505,20 @@ __global__ void preprocessCUDA(int P, int D, int M,
 	depths[idx] = sqrtf((p_view.z * p_view.z) + (p_view.x * p_view.x) + (p_view.y * p_view.y));
 	radii[idx] = my_radius;
 	
-	pbf_id[idx * 4] = screen_grid_aligned_pbf.x; 
-	pbf_id[idx * 4 + 1] = screen_grid_aligned_pbf.y;
-	pbf_id[idx * 4 + 2] = screen_grid_aligned_pbf.z;
-	pbf_id[idx * 4 + 3] = screen_grid_aligned_pbf.w;
+	aabb_id[idx * 4] = my_aabb.x; 
+	aabb_id[idx * 4 + 1] = my_aabb.y;
+	aabb_id[idx * 4 + 2] = my_aabb.z;
+	aabb_id[idx * 4 + 3] = my_aabb.w;
 
-	pbf_tan[idx] = tan_xxyy;
-	tiles_touched[idx] = (rect_max.y - rect_min.y) * (rect_max.x - rect_min.x);
-	if ((xmap != nullptr) && (mode == 1)) { // optimize tilestouched only for kb (mode == 1)
+	beap_xxyy[idx] = tan_xxyy;
+
+	if (xmap == nullptr)
+	{
+		tiles_touched[idx] = (rect_max.y - rect_min.y) * (rect_max.x - rect_min.x);
+	} else {
 		tiles_touched[idx] = duplicateToTilesTouched(
 			p_view, w2o + 3*idx, h_opacity[idx].y,
-			screen_grid_aligned_pbf, tan_xxyy, grid,
+			my_aabb, tan_xxyy, grid,
 			W, H,
 			0, 0, 0, nullptr, nullptr,
 			xmap,
@@ -550,12 +536,10 @@ renderCUDA(
 	const uint2* __restrict__ ranges,
 	const uint32_t* __restrict__ point_list,
 	int W, int H,
-	const int mode,
-	const float focal_x, float focal_y,
 	const float* tan_theta, 
 	const float* tan_phi, 
 	const float* raymap, 
-	const float4* __restrict__ pbf_tan,
+	const float4* __restrict__ beap_xxyy,
 	const float3* __restrict__ points_xyz_view,
 	const float* __restrict__ features,
 	const float2* __restrict__ h_opacity,
@@ -565,8 +549,7 @@ renderCUDA(
 	const float* __restrict__ bg_color,
 	float* __restrict__ out_color,
 	const float* __restrict__ depths,
-	float* __restrict__ invdepth
-)
+	float* __restrict__ invdepth)
 {
 	// Identify current tile and associated min/max pixel range.
 	auto block = cg::this_thread_block();
@@ -575,17 +558,10 @@ renderCUDA(
 	uint2 pix = { pix_min.x + block.thread_index().x, pix_min.y + block.thread_index().y };
 	uint32_t pix_id = W * pix.y + pix.x;
 	float3 rayf;
-	// if (raymap == nullptr) {
-	// 	rayf = make_float3((float)tan_theta[min(pix.x, W-1)], (float)tan_phi[min(pix.y, H-1)], 1.f);
-	// } else {
-	// 	rayf = make_float3((float)raymap[pix_id * 3], (float)raymap[pix_id * 3 + 1],(float)raymap[pix_id * 3 + 2]);
-	// }
-	if (mode == 0) {
+	if (raymap == nullptr) {
 		rayf = make_float3((float)tan_theta[min(pix.x, W-1)], (float)tan_phi[min(pix.y, H-1)], 1.f);
-	} else if (mode == 1) {
-		rayf = make_float3((float)raymap[pix_id * 3], (float)raymap[pix_id * 3 + 1],(float)raymap[pix_id * 3 + 2]);
 	} else {
-		rayf = { ((float)pix.x + 0.5f) / focal_x - W / (2.0f * focal_x), ((float)pix.y + 0.5f) / focal_y - H / (2.0f * focal_y), 1.0f };
+		rayf = make_float3((float)raymap[pix_id * 3], (float)raymap[pix_id * 3 + 1],(float)raymap[pix_id * 3 + 2]);
 	}
 
 	// Check if this thread is associated with a valid pixel or outside.
@@ -604,7 +580,7 @@ renderCUDA(
 	__shared__ float3 collected_xyz[BLOCK_SIZE];
 	__shared__ float2 collected_h_opacity[BLOCK_SIZE];
 	__shared__ float3 collected_w2o[BLOCK_SIZE * 3]; 
-	__shared__ float4 collected_pbf_tan[BLOCK_SIZE * 4];
+	__shared__ float4 collected_beap[BLOCK_SIZE * 4];
 
 	// Initialize helper variables
 	float T = 1.0f;
@@ -631,7 +607,7 @@ renderCUDA(
 
 			collected_id[thread_idx] = coll_id;
 			collected_xyz[thread_idx] = points_xyz_view[coll_id];
-			collected_pbf_tan[thread_idx] = pbf_tan[coll_id];
+			collected_beap[thread_idx] = beap_xxyy[coll_id];
 
 			for (int j = 0; j < 3; j++) {
 				collected_w2o[thread_idx * 3 + j] = w2o_mat[coll_id * 3 + j];
@@ -646,8 +622,8 @@ renderCUDA(
 			// Keep track of current position in range
 			contributor++;
 
-			// if (rayf not in pbf_tan) continue;
-			float4 b_xxyy = collected_pbf_tan[j];
+			// if (beapf not in beap_xxyy) return;
+			float4 b_xxyy = collected_beap[j];
 
 			// acceleration in RenderCUDA; still has GPU bubble
 			if (((rayf.x / rayf.z) < b_xxyy.x) || ((rayf.x / rayf.z) > b_xxyy.y))
@@ -715,12 +691,10 @@ void FORWARD::render(
 	const uint2* ranges,
 	const uint32_t* point_list,
 	int W, int H,
-	int mode,
-	float focal_x, float focal_y,
 	const float* tan_theta, 
 	const float* tan_phi,
 	const float* raymap, 
-	const float4* pbf_tan,
+	const float4* beap_xxyy,
 	const float3* means3D_view, 
 	const float* colors,
 	const float2* h_opacity,
@@ -736,11 +710,9 @@ void FORWARD::render(
 		ranges,
 		point_list,
 		W, H,
-		mode,
-		focal_x, focal_y,
 		tan_theta, tan_phi,
 		raymap,
-		pbf_tan,
+		beap_xxyy,
 		means3D_view,
 		colors,
 		h_opacity,
@@ -763,17 +735,17 @@ void FORWARD::preprocess(int P, int D, int M,
 	bool* clamped,
 	const float* colors_precomp,
 	const float* viewmatrix,
-	const float* mirror_transformed_tan_x,
-	const float* mirror_transformed_tan_y, 
+	const float* ref_tan_x,
+	const float* ref_tan_y, 
 	const glm::vec3* cam_pos,
 	const int W, int H,
 	const float focal_x, float focal_y,
 	const float principal_x, float principal_y,
-	const float* distortion_coeffs,
+	const float* kb_coeff,
 	const float tan_fovx, float tan_fovy,
 	int* radii,
-	int* pbf,
-	float4* pbf_tan,
+	int* aabb,
+	float4* beap_xxyy,
 	const float* xmap,
 	const float* ymap,
 	float3* means3D_view,
@@ -784,8 +756,7 @@ void FORWARD::preprocess(int P, int D, int M,
 	const dim3 grid,
 	uint32_t* tiles_touched,
 	bool prefiltered,
-	bool antialiasing,
-	int mode)
+	bool antialiasing)
 {
 	preprocessCUDA<NUM_CHANNELS> << <(P + 255) / 256, 256 >> > (
 		P, D, M,
@@ -798,15 +769,15 @@ void FORWARD::preprocess(int P, int D, int M,
 		clamped,
 		colors_precomp,
 		viewmatrix, 
-		mirror_transformed_tan_x, mirror_transformed_tan_y,
+		ref_tan_x, ref_tan_y,
 		cam_pos,
 		W, H,
 		tan_fovx, tan_fovy,
 		focal_x, focal_y,
 		principal_x, principal_y,
-		distortion_coeffs,
+		kb_coeff,
 		radii,
-		pbf, pbf_tan,
+		aabb, beap_xxyy,
 		xmap, ymap,
 		means3D_view, 
 		depths,
@@ -815,7 +786,6 @@ void FORWARD::preprocess(int P, int D, int M,
 		grid,
 		tiles_touched,
 		prefiltered,
-		antialiasing,
-		mode
+		antialiasing
 		);
 }

@@ -19,6 +19,7 @@ def mse(img1, img2):
 def psnr(img1, img2, mask=None):
     if mask is not None:
         mse = torch.sum((((img1 - img2)) ** 2) * mask) / torch.sum(mask)
+        print("returning psnr with mask")
     else:
         mse = (((img1 - img2)) ** 2).view(img1.shape[0], -1).mean(1, keepdim=True)
     return 20 * torch.log10(1.0 / torch.sqrt(mse))
@@ -80,6 +81,7 @@ def artifact_sensitive_l1(img1, img2, mask=None):
     if mask is not None:
         # assert mask.shape[1] == 1, f"Mask should have shape [B, 1, H, W], now with {mask.shape}"
         loss = (diff * mask).sum() / mask.sum()
+        print("returning edge_l1 with mask")
     else:
         loss = diff.mean()
 

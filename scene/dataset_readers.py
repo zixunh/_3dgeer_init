@@ -253,7 +253,7 @@ def readColmapSceneInfo(path, images, depths, eval, train_test_exp, llffhold=8):
                            is_nerf_synthetic=False)
     return scene_info
 
-
+# for ray-splatting
 def readColmapCameras_fisheye(cam_extrinsics, cam_intrinsics, images_folder, fov_mod, override_intr=None):
     cam_infos = []
     for idx, key in enumerate(cam_extrinsics):
@@ -293,7 +293,6 @@ def readColmapCameras_fisheye(cam_extrinsics, cam_intrinsics, images_folder, fov
             principal_x = intr.params[2]
             principal_y = intr.params[3]
             # Change the fov to match the undistorted image
-            fov_mod = 1.0 if fov_mod is None else fov_mod
             FovY = min(np.pi, focal2fov2(focal_length_y, height) * fov_mod) #/ 0.8
             FovX = min(np.pi, focal2fov2(focal_length_x, width) * fov_mod) #/ 0.8
         else:
@@ -317,7 +316,7 @@ def readColmapCameras_fisheye(cam_extrinsics, cam_intrinsics, images_folder, fov
     sys.stdout.write('\n')
     return cam_infos
 
-
+# for ray-splatting
 def readColmapSceneInfo_fisheye(args, override_intr=None):
     
     ################
@@ -460,15 +459,17 @@ def readNerfSyntheticInfo(path, white_background, depths, eval, extension=".png"
                            is_nerf_synthetic=True)
     return scene_info
 
+# for ray-splatting
 def readScannetppInfo(args):
     # Both scannetpp and zipnerf uses readScannetppInfo this class.
     # If scannetpp is used, add args.colmaps = 'colmap' to the args. For zipnerf, it is None.
-    args.colmaps = 'colmap' #if 'scannetpp' in args.source_path else None
+    args.colmaps = 'colmap' if 'scannetpp' in args.source_path else None
     if args.camera_model == "PINHOLE":
         args.images = 'undistorted_images'
     if args.camera_model == "FISHEYE":
         sample_step = args.sample_step
-        args.images = f'beap_fov_{args.fov_mod}_step_{sample_step}' if args.render_model=="BEAP" else "resized_images"
+        # sample_step = "{:.0e}".format(sample_step).replace("e-0", "e-")
+        args.images = f'undistorted_fovmaps_fov_{args.fov_mod}_step_{sample_step}'
         print(args.images)
 
     override_intr = None

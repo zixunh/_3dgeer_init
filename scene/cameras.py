@@ -91,7 +91,8 @@ class Camera(nn.Module):
         self.full_proj_transform = (self.world_view_transform.unsqueeze(0).bmm(self.projection_matrix.unsqueeze(0))).squeeze(0)
         self.camera_center = self.world_view_transform.inverse()[3, :3]
 
-        # ── GEER ray-direction grids ──────────────────────────────────────────
+        # for ray-splatting start
+        # Change the step adjust resolution
         arr_theta, arr_phi = self.fov_sample2ray(FoVx/2, FoVy/2, step)
         cos_theta = torch.cos(arr_theta)
         cos_phi = torch.cos(arr_phi)
@@ -100,16 +101,13 @@ class Camera(nn.Module):
         cos_phi = torch.where(torch.abs(cos_phi) < 1e-7, torch.full_like(cos_phi, 1e-7), cos_phi).to(self.data_device)
         self.tan_theta = torch.tan(arr_theta).to(self.data_device)
         self.tan_phi = torch.tan(arr_phi).to(self.data_device)
-        self.mirror_transformed_tan_theta = self.mirror_transform(self.tan_theta, cos_theta).float()
-        self.mirror_transformed_tan_phi = self.mirror_transform(self.tan_phi, cos_phi).float()
+        self.omni_tan_theta = self.omni_map_z(self.tan_theta, cos_theta).float()
+        self.omni_tan_phi = self.omni_map_z(self.tan_phi, cos_phi).float()
         self.sampled_image = self.original_image
 
-        self.render_model = 0 if render_model == "BEAP" else (1 if render_model in ("KB", "EQ") else 2)
+        self.render_model = 0 if render_model == "BEAP" else 1
 
         if render_model == "BEAP":
-            # BEAP mode: use the sorted tan_theta / tan_phi grids for rasterization.
-            # No fisheye intrinsics are needed; the image dimensions come from the
-            # ray-grid sizes.
             self.focal_x = None
             self.focal_y = None
             self.principal_x = None
@@ -120,9 +118,6 @@ class Camera(nn.Module):
             self.image_width = self.tan_theta.shape[0]
             self.image_height = self.tan_phi.shape[0]
         elif render_model == "KB" or render_model == "EQ":
-            # KB mode: Kannala-Brandt fisheye camera.  Uses a per-pixel raymap and
-            # polynomial distortion coefficients for the PBF→pixel projection.
-            # EQ mode: equidistant fisheye (distortion_scaling=0 zeroes the KB coeffs).
             distortion_scaling = 0.0 if render_model == "EQ" else distortion_scaling
             self.focal_x = focal_x.item() * focal_scaling
             self.focal_y = focal_y.item() * focal_scaling
@@ -134,27 +129,9 @@ class Camera(nn.Module):
             self.raymap = torch.from_numpy(raymap.astype(np.float32)) #self.scannetpp_raymap(raymap, resolution, focal_x, focal_y, FoVx, FoVy, step)
             self.image_width = self.raymap.shape[1]
             self.image_height = self.raymap.shape[0]
-        elif render_model == "PH":
-            # Pinhole camera: standard perspective projection using focal lengths and
-            # principal point.  No distortion correction or per-pixel raymap required;
-            # the CUDA else-branch computes ray directions directly from focal lengths.
-            self.focal_x = focal_x.item() * focal_scaling
-            self.focal_y = focal_y.item() * focal_scaling
-            self.principal_x = principal_x.item()
-            self.principal_y = principal_y.item()
-            self.distortion_coeffs = None
-            self.mirror_shift = None
-            self.raymap = None
-            self.image_width = resolution[0]
-            self.image_height = resolution[1]
 
     @staticmethod
     def fov_sample2ray(fovx, fovy, interval):
-        """Build symmetric 1-D arrays of ray-direction half-angles in [-fov, +fov].
-
-        Each element is spaced `interval` radians apart, starting at interval/2.
-        Returns (theta_arr, phi_arr) as sorted float tensors.
-        """
         theta_arr = torch.arange(interval / 2, fovx, interval)
         theta_arr, _ = torch.sort(torch.cat((-theta_arr, theta_arr)))
         phi_arr = torch.arange(interval / 2, fovy, interval)
@@ -163,13 +140,9 @@ class Camera(nn.Module):
         return theta_arr.float(), phi_arr.float()
 
     @staticmethod
-    def mirror_transform(m, z, xi=0.0): #1.1
-        """Apply the omnidirectional mapping to a tangent array m.
-
-        Mirror transform tan(θ); reference: Appendix D.2.
-        """
+    def omni_map_z(m, z, xi=0.0): #1.1
         return m / (1+xi*(z/(torch.abs(z)))*(1+m**2)**0.5)
-
+        
 class MiniCam:
     def __init__(self, width, height, fovy, fovx, znear, zfar, world_view_transform, full_proj_transform, sample_step):
         self.image_width = width
@@ -192,8 +165,8 @@ class MiniCam:
         cos_phi = torch.where(torch.abs(cos_phi) < 1e-7, torch.full_like(cos_phi, 1e-7), cos_phi)#.to(self.data_device)
         self.tan_theta = torch.tan(arr_theta)#.to(self.data_device)
         self.tan_phi = torch.tan(arr_phi)#.to(self.data_device)
-        self.mirror_transformed_tan_theta = self.mirror_transform(self.tan_theta, cos_theta)
-        self.mirror_transformed_tan_phi = self.mirror_transform(self.tan_phi, cos_phi)
+        self.omni_tan_theta = self.omni_map_z(self.tan_theta, cos_theta)
+        self.omni_tan_phi = self.omni_map_z(self.tan_phi, cos_phi)
 
     @staticmethod
     def fov_sample2ray(fovx, fovy, interval):
@@ -205,11 +178,11 @@ class MiniCam:
         return theta_arr.float(), phi_arr.float()
 
     @staticmethod
-    def mirror_transform(m, z, xi=0.0): #1.1
+    def omni_map_z(m, z, xi=0.0): #1.1
         return m / (1+xi*(z/(torch.abs(z)))*(1+m**2)**0.5)
     
     def get_viewpoint_mask(self, ref_camera_dir):
-        from prepare_beap import read_intrinsics_text, fov2tan
+        from prepare_fov import read_intrinsics_text, fov2tan
         _, _, width, height, params = read_intrinsics_text(ref_camera_dir)
         fx = params[0]
         fy = params[1]

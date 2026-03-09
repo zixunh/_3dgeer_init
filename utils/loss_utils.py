@@ -59,6 +59,7 @@ def _ssim(img1, img2, window, window_size, channel, size_average=True, mask=None
 
     if mask is not None:
         masked_ssim = (ssim_map * mask).sum() / mask.sum()
+        print("returning masked ssim")
         return masked_ssim
 
     if size_average:

@@ -25,13 +25,13 @@ RasterizeGaussiansCUDA(
 	const torch::Tensor& rotations,
 	const float scale_modifier,
 	const torch::Tensor& viewmatrix,
-	const torch::Tensor& mirror_transformed_tan_theta, 
-	const torch::Tensor& mirror_transformed_tan_phi, 
+	const torch::Tensor& omni_tan_theta, 
+	const torch::Tensor& omni_tan_phi, 
 	const torch::Tensor& tan_theta, 
 	const torch::Tensor& tan_phi, 
 	const float focal_x, float focal_y,
 	const float principal_x, float principal_y,
-	const torch::Tensor& distortion_coeffs,
+	const torch::Tensor& kb_coeff,
 	const torch::Tensor& raymap, 
 	const float tan_fovx, 
 	const float tan_fovy,
@@ -42,7 +42,6 @@ RasterizeGaussiansCUDA(
 	const torch::Tensor& campos,
 	const bool prefiltered,
 	const bool antialiasing,
-	const int mode,
 	const bool debug);
 
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>

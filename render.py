@@ -23,6 +23,9 @@ from arguments import ModelParams, PipelineParams, get_combined_args
 from gaussian_renderer import GaussianModel
 from utils.image_utils import psnr
 import numpy as np
+import cv2
+import time
+
 
 def render_set(model_path,name, iteration, views, gaussians, pipeline, background, train_test_exp):
     max_allocated_memory_before = torch.cuda.max_memory_allocated()
@@ -98,20 +101,25 @@ def render_set(model_path,name, iteration, views, gaussians, pipeline, backgroun
     print(f"Associated Gaus num of each tile\n: mean {range_lens.float().mean().item()} Gaussians, std {range_lens.float().std().item()} Gaussians, min {range_lens.float().min().item()} Gaussians, max {range_lens.float().max().item()} Gaussians")
 
     means = torch.tensor(render_times_overall).mean()
+    maxs = torch.tensor(render_times_overall).max()
     FPS = 1.0 / (means / 1000.0)
     print(f"  AVG_OVERALL_Time : {means} ms")
-    print(f" AVG_OVERALL_Time FPS: {FPS}")
+    print(f" AVG_OVERALL_Time FPS: {FPS}")   
 
     means = torch.tensor(render_times_prep).mean()
+    maxs = torch.tensor(render_times_prep).max()
     print(f"  AVG_PREP_Time : {means} ms")
 
     means = torch.tensor(render_times_dup).mean()
+    maxs = torch.tensor(render_times_dup).max()
     print(f"  AVG_DUP_Time : {means} ms")
 
     means = torch.tensor(render_times_sort).mean()
+    maxs = torch.tensor(render_times_sort).max()
     print(f"  AVG_SORT_Time : {means} ms")
 
     means = torch.tensor(render_times_render).mean()
+    maxs = torch.tensor(render_times_render).max()
     print(f"  AVG_RenFunc_Time : {means} ms")
 
 
@@ -123,9 +131,8 @@ def render_sets(dataset : ModelParams, iteration : int, pipeline : PipelineParam
         dataset.fov_mod = fov_mod
         dataset.sample_step = sample_step
 
-        dataset.raymap = None
-        if raymap_path is not None and os.path.exists(raymap_path):
-            dataset.raymap = np.load(raymap_path)
+        raymap_fisheye = np.load(raymap_path)
+        dataset.raymap = raymap_fisheye
         dataset.render_model = render_model
         dataset.focal_scaling = focal_scaling
         dataset.distortion_scaling = distortion_scaling
@@ -160,9 +167,6 @@ if __name__ == "__main__":
     parser.add_argument("--sample_step", type=float, default = None)
     parser.add_argument("--fov_mod", type=float, default = None)
     args = get_combined_args(parser)
-    for k in ["fov_mod", "sample_step", "distortion_scaling", "focal_scaling", "mirror_shift", "raymap_path"]:
-        if not hasattr(args, k):
-            setattr(args, k, None)
     print("Rendering " + args.model_path)
 
     # Initialize system state (RNG)

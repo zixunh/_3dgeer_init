@@ -94,14 +94,13 @@ __global__ void duplicateWithKeys(
 	uint64_t* gaussian_keys_unsorted,
 	uint32_t* gaussian_values_unsorted,
 	int* radii,
-	const int4* pbf,
-	const float4* pbf_tan,
+	const int4* aabb,
+	const float4* beap_xxyy,
 	const float* xmap,
 	const float* ymap,
 	const int W, int H,
 	uint32_t* tiles_touched,
-	dim3 grid,
-	int mode)
+	dim3 grid)
 {
 	auto idx = cg::this_grid().thread_rank();
 	if (idx >= P)
@@ -120,9 +119,9 @@ __global__ void duplicateWithKeys(
 		// and the value is the ID of the Gaussian. Sorting the values 
 		// with this key yields Gaussian IDs in a list, such that they
 		// are first sorted by tile and then by depth. 
-		if ((xmap == nullptr) || (mode != 1)) {
+		if (xmap == nullptr) {
 			uint2 rect_min, rect_max;
-			getRect2(pbf[idx], rect_min, rect_max, grid);
+			getRect2(aabb[idx], rect_min, rect_max, grid);
 	
 			for (int y = rect_min.y; y < rect_max.y; y++)
 			{
@@ -139,7 +138,7 @@ __global__ void duplicateWithKeys(
 		} else {
 			tiles_touched[idx] = duplicateToTilesTouched(
 				points_xyz[idx], w2o + 3 * idx, h_opacity[idx].y,
-				pbf[idx], pbf_tan[idx], grid,
+				aabb[idx], beap_xxyy[idx], grid,
 				W, H,
 				idx, off, depths[idx],
 				gaussian_keys_unsorted,
@@ -207,8 +206,8 @@ CudaRasterizer::GeometryState CudaRasterizer::GeometryState::fromChunk(char*& ch
 	obtain(chunk, geom.means3D_view, P, 128);
 	obtain(chunk, geom.h_opacity, P, 128);
 	obtain(chunk, geom.w2o, P * 3, 128);
-	obtain(chunk, geom.pbf, P * 4, 128); 
-	obtain(chunk, geom.pbf_tan, P, 128);
+	obtain(chunk, geom.aabb, P * 4, 128); 
+	obtain(chunk, geom.beap_xxyy, P, 128);
 	obtain(chunk, geom.rgb, P * 3, 128);
 	obtain(chunk, geom.tiles_touched, P, 128);
 	cub::DeviceScan::InclusiveSum(nullptr, geom.scan_size, geom.tiles_touched, geom.tiles_touched, P);
@@ -258,12 +257,12 @@ int CudaRasterizer::Rasterizer::forward(
 	const float scale_modifier,
 	const float* rotations,
 	const float* viewmatrix,
-	const float* mirror_transformed_tan_theta, const float* mirror_transformed_tan_phi, 
+	const float* omni_tan_theta, const float* omni_tan_phi, 
 	const float* tan_theta, const float* tan_phi,
 	const float* cam_pos,
 	const float focal_x, float focal_y, 
 	const float principal_x, float principal_y,
-	const float* distortion_coeffs,
+	const float* kb_coeff,
 	const float* raymap, 
 	float* xmap, float* ymap,
 	const float tan_fovx, float tan_fovy,
@@ -272,7 +271,6 @@ int CudaRasterizer::Rasterizer::forward(
 	float* out_color,
 	float* depth,
 	bool antialiasing,
-	const int mode,
 	int* radii,
 	int* range_len,
 	bool debug)
@@ -318,21 +316,19 @@ int CudaRasterizer::Rasterizer::forward(
 		throw std::runtime_error("For non-RGB, provide precomputed Gaussian colors!");
 	}
 
-	if ((mode == 1) && (raymap != nullptr)) {
-		extractRaymapChannel << <(width * height + 255) / 256, 256 >> > (
-			raymap,
-			width, height,
-			xmap, 0,
-			width * height);
-		CHECK_CUDA(, debug);
-	
-		extractRaymapChannel << <(width * height + 255) / 256, 256 >> > (
-			raymap,
-			width, height,
-			ymap, 1,
-			width * height);
-		CHECK_CUDA(, debug);
-	}
+	extractRaymapChannel << <(width * height + 255) / 256, 256 >> > (
+		raymap,
+		width, height,
+		xmap, 0,
+		width * height);
+	CHECK_CUDA(, debug);
+
+	extractRaymapChannel << <(width * height + 255) / 256, 256 >> > (
+		raymap,
+		width, height,
+		ymap, 1,
+		width * height);
+	CHECK_CUDA(, debug);
 
 	// Run preprocessing per-Gaussian (transformation, bounding, conversion of SHs to RGB)
 	cudaEventRecord(preprocessStart, 0);
@@ -347,17 +343,17 @@ int CudaRasterizer::Rasterizer::forward(
 		geomState.clamped,
 		colors_precomp,
 		viewmatrix, 
-		mirror_transformed_tan_theta, 
-		mirror_transformed_tan_phi,
+		omni_tan_theta, 
+		omni_tan_phi,
 		(glm::vec3*)cam_pos,
 		width, height,
 		focal_x, focal_y,
 	    principal_x, principal_y,
-	    distortion_coeffs,
+	    kb_coeff,
 		tan_fovx, tan_fovy,
 		radii,
-		geomState.pbf,
-		geomState.pbf_tan,
+		geomState.aabb,
+		geomState.beap_xxyy,
 		xmap, ymap,
 		geomState.means3D_view,
 		geomState.depths,
@@ -367,8 +363,7 @@ int CudaRasterizer::Rasterizer::forward(
 		tile_grid,
 		geomState.tiles_touched,
 		prefiltered,
-		antialiasing,
-		mode
+		antialiasing
 	), debug)
 
 	cudaEventRecord(preprocessStop, 0);
@@ -400,13 +395,12 @@ int CudaRasterizer::Rasterizer::forward(
 		binningState.point_list_keys_unsorted,
 		binningState.point_list_unsorted,
 		radii,
-		(int4*) geomState.pbf,
-		geomState.pbf_tan,
+		(int4*) geomState.aabb,
+		geomState.beap_xxyy,
 		xmap, ymap,
 		width, height,
 		geomState.tiles_touched,
-		tile_grid,
-		mode)
+		tile_grid)
 	CHECK_CUDA(, debug)
 	cudaEventRecord(duplicateStop, 0);
 	cudaEventSynchronize(duplicateStop);
@@ -451,11 +445,9 @@ int CudaRasterizer::Rasterizer::forward(
 		imgState.ranges,
 		binningState.point_list,
 		width, height,
-		mode,
-		focal_x, focal_y,
 		tan_theta, tan_phi, 
 		raymap, 
-		geomState.pbf_tan, 
+		geomState.beap_xxyy, 
 		geomState.means3D_view, 
 		feature_ptr,
 		geomState.h_opacity,

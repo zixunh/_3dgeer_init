@@ -29,16 +29,16 @@ namespace CudaRasterizer
 	struct GeometryState
 	{
 		size_t scan_size;
-		float* depths;          // Euclidean distance from camera to each Gaussian centre (used for depth-sorted blending)
+		float* depths;
 		char* scanning_space;
-		bool* clamped;          // Per-channel SH clamping flags (for backward pass)
-		int* pbf;               // Pixel-space PBF of each Gaussian: [x_min, x_max, y_min, y_max]
-		float4* pbf_tan;        // PBF (Particle Bounding Frustum) in ray-direction tangent space {tan_theta_min, tan_theta_max, tan_phi_min, tan_phi_max}
+		bool* clamped;
+		int* aabb; 
+		float4* beap_xxyy; 
 		int* internal_radii;
-		float3* means3D_view;   // Gaussian centre positions in view/camera space
-		float2* h_opacity;      // Packed {x=antialiasing variance h_var, y=antialiasing-scaled opacity}
-		float3* w2o;            // World-to-object (canonical) matrix rows: 3 float3 per Gaussian = Σ^{-1/2}R_view^T
-		float* rgb;             // Pre-computed RGB colors (from SH evaluation)
+		float3* means3D_view;
+		float2* h_opacity;
+		float3* w2o;
+		float* rgb;
 		uint32_t* point_offsets;
 		uint32_t* tiles_touched;
 
@@ -47,9 +47,9 @@ namespace CudaRasterizer
 
 	struct ImageState
 	{
-		uint2* ranges;          // Per-tile [start, end) range in the sorted Gaussian list
-		uint32_t* n_contrib;    // Per-pixel: index of the last contributing Gaussian (for backward)
-		float* accum_alpha;     // Per-pixel accumulated transmittance T (= product of (1-alpha) terms)
+		uint2* ranges;
+		uint32_t* n_contrib;
+		float* accum_alpha;
 
 		static ImageState fromChunk(char*& chunk, size_t N);
 	};
@@ -57,10 +57,10 @@ namespace CudaRasterizer
 	struct BinningState
 	{
 		size_t sorting_size;
-		uint64_t* point_list_keys_unsorted;  // Unsorted keys: upper 32 bits = tile ID, lower 32 bits = depth bits
-		uint64_t* point_list_keys;           // Sorted keys
-		uint32_t* point_list_unsorted;       // Unsorted Gaussian indices
-		uint32_t* point_list;               // Sorted Gaussian indices (tile-then-depth order)
+		uint64_t* point_list_keys_unsorted;
+		uint64_t* point_list_keys;
+		uint32_t* point_list_unsorted;
+		uint32_t* point_list;
 		char* list_sorting_space;
 
 		static BinningState fromChunk(char*& chunk, size_t P);

@@ -228,7 +228,7 @@ __global__ void preprocessCUDA_mah(
 		viewmatrix[2], viewmatrix[6], viewmatrix[10]);
 
 	float3 p_view = means3D_view[idx];
-	float h_var = h_opacity[idx].x;
+	float h_var = h_opacity[idx].y;
 
 	// Compute gradient updates due to computing covariance from scale/rotation
 	float dL_dhvar = 0.0f;
@@ -402,13 +402,10 @@ renderCUDA(
 			// Compute blending values, as before.
 			const float3 xyz = collected_xyz[j];
 			const float2 h_o = collected_h_opacity[j];
-			float3* w2o_rows = collected_w2o + j * 3; 
-			
-			// see 3DGEER paper: https://openreview.net/pdf?id=4voMNlRWI7 (Eq. 5, Sec.C)
-			// Transform Gaussian centre and ray direction into the canonical/object frame
-			// using the packed world-to-object matrix rows w2o_rows[0..2].
-			const float3 p_obj = { dot(xyz, w2o_rows[0]), dot(xyz, w2o_rows[1]), dot(xyz, w2o_rows[2]) };
-			const float3 d_obj = { dot(rayf, w2o_rows[0]), dot(rayf, w2o_rows[1]), dot(rayf, w2o_rows[2]) };  
+			float3* sigma = collected_w2o + j * 3;
+
+			const float3 p_obj = { dot(xyz, sigma[0]), dot(xyz, sigma[1]), dot(xyz, sigma[2]) };
+			const float3 d_obj = { dot(rayf, sigma[0]), dot(rayf, sigma[1]), dot(rayf, sigma[2]) };  
 			const float3 normal = cross(d_obj, p_obj);
 			const float dobj_norm_sq = dot(d_obj, d_obj);
 			const float D2 = dot(normal, normal) / dobj_norm_sq;

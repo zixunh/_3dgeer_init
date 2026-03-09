@@ -52,10 +52,6 @@ class _RasterizeGaussians(torch.autograd.Function):
         rotations,
         raster_settings,
     ):
-        """Forward pass: rasterize 3D Gaussians into an image using the GEER algorithm.
-
-        Returns (color [C,H,W], radii [P], invdepth [1,H,W], kernel_times [5], tile_ranges [T]).
-        """
 
         # Restructure arguments the way that the C++ lib expects them
         args = (
@@ -67,8 +63,8 @@ class _RasterizeGaussians(torch.autograd.Function):
             rotations,
             raster_settings.scale_modifier,
             raster_settings.viewmatrix,
-            raster_settings.mirror_transformed_tan_theta,
-            raster_settings.mirror_transformed_tan_phi,
+            raster_settings.omni_tan_theta,
+            raster_settings.omni_tan_phi,
             raster_settings.tan_theta,
             raster_settings.tan_phi,
             raster_settings.focal_x, raster_settings.focal_y, 
@@ -84,7 +80,6 @@ class _RasterizeGaussians(torch.autograd.Function):
             raster_settings.campos,
             raster_settings.prefiltered,
             raster_settings.antialiasing,
-            raster_settings.render_mode,
             raster_settings.debug
         )
 
@@ -99,11 +94,6 @@ class _RasterizeGaussians(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_out_color, _, grad_out_depth):
-        """Backward pass: propagate gradients from pixel loss to Gaussian parameters.
-
-        Inputs grad_out_color [C,H,W] and grad_out_depth [1,H,W] (ignored middle output).
-        Returns gradients for (means3D, means2D, sh, colors_precomp, opacities, scales, rotations, None).
-        """
 
         # Restore necessary values from context
         num_rendered = ctx.num_rendered
@@ -153,35 +143,28 @@ class _RasterizeGaussians(torch.autograd.Function):
         return grads
 
 class GaussianRasterizationSettings(NamedTuple):
-    """
-        Settings passed to the CUDA rasterizer for each forward/backward call.
-    """
     image_height: int
-    image_width: int
-    tanfovx: float        
-    tanfovy: float       
-    bg: torch.Tensor       
-    scale_modifier: float   
-    viewmatrix: torch.Tensor  
-    # BEAP ray-direction reference arrays (sorted, used for PBF→pixel mapping in BEAP mode)
-    mirror_transformed_tan_theta: torch.Tensor  # 1-D tensor of tan(θ) values along the horizontal axis
-    mirror_transformed_tan_phi: torch.Tensor    # 1-D tensor of tan(φ) values along the vertical axis
-    # Per-pixel ray direction tangents (BEAP mode: 1-D sorted grids; KB mode: unused)
-    tan_theta: torch.Tensor  # Horizontal ray tangents
-    tan_phi: torch.Tensor    # Vertical ray tangents
-    # KB / EQ fisheye intrinsics (only used when render_model==1)
-    focal_x: float          # Horizontal focal length (pixels)
-    focal_y: float          # Vertical focal length (pixels)
-    principal_x: float      # Horizontal principal point (pixels)
-    principal_y: float      # Vertical principal point (pixels)
-    distortion_coeffs: torch.Tensor  # KB polynomial distortion coefficients [k1, k2, k3, k4]
-    raymap: torch.Tensor    # [H, W, 3] per-pixel ray direction map (used in KB/EQ mode)
-    sh_degree: int          
-    campos: torch.Tensor    # Camera centre in world space [3]
-    prefiltered: bool       
-    debug: bool            
-    antialiasing: bool   
-    render_mode: int   
+    image_width: int 
+    tanfovx : float
+    tanfovy : float
+    bg : torch.Tensor
+    scale_modifier : float
+    viewmatrix : torch.Tensor
+    omni_tan_theta: torch.Tensor 
+    omni_tan_phi: torch.Tensor 
+    tan_theta: torch.Tensor
+    tan_phi: torch.Tensor
+    focal_x: float
+    focal_y: float
+    principal_x: float
+    principal_y: float
+    distortion_coeffs: torch.Tensor
+    raymap: torch.Tensor
+    sh_degree: int
+    campos: torch.Tensor
+    prefiltered: bool
+    debug : bool
+    antialiasing : bool
 
 class GaussianRasterizer(nn.Module):
     def __init__(self, raster_settings):

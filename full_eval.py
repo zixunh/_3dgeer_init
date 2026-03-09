@@ -61,8 +61,8 @@ if not args.skip_training:
         os.system("python train.py -s " + source + " -m " + args.output_path + "/" + scene + common_args)
     db_timing = (time.time() - start_time)/60.0
 
-    with open("timing.txt", 'w') as file:
-        file.write(f"m360: {m360_timing} minutes \n tandt: {tandt_timing} minutes \n db: {db_timing} minutes\n")
+with open("timing.txt", 'w') as file:
+    file.write(f"m360: {m360_timing} minutes \n tandt: {tandt_timing} minutes \n db: {db_timing} minutes\n")
 
 if not args.skip_rendering:
     all_sources = []

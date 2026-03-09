@@ -81,15 +81,15 @@ __forceinline__ __device__ float2 invinterpolated_uv(
 	return uv_indices;
 }
 
-__forceinline__ __device__ void getRect2(const int4 pbf, uint2& rect_min, uint2& rect_max, dim3 grid)
+__forceinline__ __device__ void getRect2(const int4 aabb, uint2& rect_min, uint2& rect_max, dim3 grid)
 {
 	rect_min = {
-		min(grid.x, max((int)0, (int)((pbf.x) / BLOCK_X))),
-		min(grid.y, max((int)0, (int)((pbf.z) / BLOCK_Y)))
+		min(grid.x, max((int)0, (int)((aabb.x) / BLOCK_X))),
+		min(grid.y, max((int)0, (int)((aabb.z) / BLOCK_Y)))
 	};
 	rect_max = {
-		min(grid.x, max((int)0, (int)((pbf.y + BLOCK_X - 1) / BLOCK_X))),
-		min(grid.y, max((int)0, (int)((pbf.w + BLOCK_Y - 1) / BLOCK_Y)))
+		min(grid.x, max((int)0, (int)((aabb.y + BLOCK_X - 1) / BLOCK_X))),
+		min(grid.y, max((int)0, (int)((aabb.w + BLOCK_Y - 1) / BLOCK_Y)))
 	};
 }
 
@@ -102,30 +102,23 @@ __forceinline__ __device__ void searchsorted_intersect(
 	thrust::lower_bound(thrust::device, ref_start, ref_start + span, values, values + 2, indices);
 }
 
-// Check whether the ray direction for pixel `idx` falls within the
-// Particle Bounding Frustum (PBF) defined in tan-space as pbf_tan.
-// pbf_tan: (.x=tan_theta_min, .y=tan_theta_max, .z=tan_phi_min, .w=tan_phi_max)
-__forceinline__ __device__ bool checkValid(
+__forceinline__ __device__ bool checkVaild(
 	const float* raymap,
 	const int idx,
-	const float4 pbf_tan
+	const float4 beap_xxyy
 ) {
 	float2 rayf = {(float)raymap[idx * 3] / (float)raymap[idx * 3 + 2], (float)raymap[idx * 3 + 1] / (float)raymap[idx * 3 + 2]};
-	if (rayf.x < pbf_tan.x || rayf.x > pbf_tan.y) return false;
-	if (rayf.y < pbf_tan.z || rayf.y > pbf_tan.w) return false;
+	if (rayf.x < beap_xxyy.x || rayf.x > beap_xxyy.y) return false;
+	if (rayf.y < beap_xxyy.z || rayf.y > beap_xxyy.w) return false;
 	return true;
 }
 
-// Emit (tile_id | depth, gaussian_id) key/value pairs for every tile that the
-// Particle Bounding Frustum (PBF) of this Gaussian overlaps.  When xmap/ymap
-// are provided the PBF is projected onto the KB image grid via sorted intersection;
-// otherwise a simple tile-rectangle loop is used (BEAP mode).
 __forceinline__ __device__ uint32_t duplicateToTilesTouched(    
 	const float3 points_xyz,
 	const float3* w2o,
 	const float opac,
-	int4 pbf,
-	float4 pbf_tan,
+	int4 aabb,
+	float4 beap_xxyy,
 	const dim3 grid,
 	const int W, int H,
     uint32_t idx, uint32_t off, float depth,
@@ -137,7 +130,7 @@ __forceinline__ __device__ uint32_t duplicateToTilesTouched(
 {
 	uint2 rect_min, rect_max;
 
-	getRect2(pbf, rect_min, rect_max, grid);
+	getRect2(aabb, rect_min, rect_max, grid);
 
 	int y_span = rect_max.y - rect_min.y;
 	int x_span = rect_max.x - rect_min.x;
@@ -150,11 +143,11 @@ __forceinline__ __device__ uint32_t duplicateToTilesTouched(
 	bool isY = y_span > x_span;
 	const uint2 rect_max_ = isY ? rect_max : make_uint2(rect_max.y, rect_max.x);
 	const uint2 rect_min_ = isY ? rect_min : make_uint2(rect_min.y, rect_min.x);
-	const int4 pbf_ = isY ? pbf : make_int4(pbf.z, pbf.w, pbf.x, pbf.y);
-	const float2 pbf_tan_ = isY ? make_float2(pbf_tan.x, pbf_tan.y) : make_float2(pbf_tan.z, pbf_tan.w);
+	const int4 aabb_ = isY ? aabb : make_int4(aabb.z, aabb.w, aabb.x, aabb.y);
+	const float2 beap_xxyy_ = isY ? make_float2(beap_xxyy.x, beap_xxyy.y) : make_float2(beap_xxyy.z, beap_xxyy.w);
 	const float* cmap = isY ? xmap : ymap;
 	const int W_ = isY ? W : H;
-	// const int H_ = isY ? H : W;
+	const int H_ = isY ? H : W;
 
 	uint32_t tiles_count = 0;
     int2 slice_intersect_top, slice_intersect_bottom;
@@ -168,23 +161,23 @@ __forceinline__ __device__ uint32_t duplicateToTilesTouched(
 	for (int y = rect_min_.y; y < rect_max_.y; y++)
 	{
 		// Get original BEAP ranged slice;
-		slice_leftbottom = min(max(pbf_.z, y * BLOCK_Y), pbf_.w) * W_ + pbf_.x;
-		searchsorted_intersect(cmap + slice_leftbottom, pbf_.y - pbf_.x + 1, (float*)(&pbf_tan_), (int*)(&slice_intersect_bottom));
+		slice_leftbottom = min(max(aabb_.z, y * BLOCK_Y), aabb_.w) * W_ + aabb_.x;
+		searchsorted_intersect(cmap + slice_leftbottom, aabb_.y - aabb_.x + 1, (float*)(&beap_xxyy_), (int*)(&slice_intersect_bottom));
 
-		slice_lefttop = min(max(pbf_.z, (y * BLOCK_Y + BLOCK_Y - 1)), pbf_.w) * W_ + pbf_.x;
-		searchsorted_intersect(cmap + slice_lefttop, pbf_.y - pbf_.x + 1, (float*)(&pbf_tan_), (int*)(&slice_intersect_top));
+		slice_lefttop = min(max(aabb_.z, (y * BLOCK_Y + BLOCK_Y - 1)), aabb_.w) * W_ + aabb_.x;
+		searchsorted_intersect(cmap + slice_lefttop, aabb_.y - aabb_.x + 1, (float*)(&beap_xxyy_), (int*)(&slice_intersect_top));
 
 		// Cull out useless tiles;
-		int tmp_left = min(max(0, min(slice_intersect_top.x, slice_intersect_bottom.x)), pbf_.y - pbf_.x);
-		int tmp_right = min(max(0, max(slice_intersect_top.y, slice_intersect_bottom.y)), pbf_.y - pbf_.x);
+		int tmp_left = min(max(0, min(slice_intersect_top.x, slice_intersect_bottom.x)), aabb_.y - aabb_.x);
+		int tmp_right = min(max(0, max(slice_intersect_top.y, slice_intersect_bottom.y)), aabb_.y - aabb_.x);
 		if (tmp_left >= tmp_right) {
 			continue;
 		}
 		int min_tile_x = max(rect_min_.x,
-            min(rect_max_.x, (int)((pbf_.x + tmp_left) / BLOCK_X))
+            min(rect_max_.x, (int)((aabb_.x + tmp_left) / BLOCK_X))
         );
         int max_tile_x = max(rect_min_.x,
-            min(rect_max_.x, (int)((pbf_.x + tmp_right + BLOCK_X - 1) / BLOCK_X))
+            min(rect_max_.x, (int)((aabb_.x + tmp_right + BLOCK_X - 1) / BLOCK_X))
         );
 		tiles_count += (max_tile_x - min_tile_x);
 		for (int x = min_tile_x; x < max_tile_x; x++)
@@ -283,16 +276,6 @@ __forceinline__ __device__ float sigmoid(float x)
 {
 	return 1.0f / (1.0f + expf(-x));
 }
-
-// ── Packed-type conventions used throughout the rasterizer ──────────────────
-// float2 h_opacity  : { x = antialiasing variance h_var,
-//                       y = antialiasing-scaled Gaussian opacity }
-// float4 pbf_tan    : PBF (Particle Bounding Frustum) in ray-direction
-//                     tangent space { x = tan_theta_min,  y = tan_theta_max,
-//                                     z = tan_phi_min,    w = tan_phi_max }
-// float3 w2o[3]     : rows of the world-to-object (canonical) matrix Σ^{-1/2}R_view^T
-//                     (one float3 per row → 3 rows total per Gaussian)
-// ────────────────────────────────────────────────────────────────────────────
 
 __forceinline__ __device__ bool in_frustum(int idx,
 	const float* orig_points,

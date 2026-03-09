@@ -18,7 +18,7 @@ from utils.loss_utils import ssim
 from lpipsPyTorch import lpips
 import json
 from tqdm import tqdm
-from utils.image_utils import psnr
+from utils.image_utils import psnr, artifact_sensitive_l1
 from argparse import ArgumentParser
 import glob
 import math
@@ -45,13 +45,14 @@ def evaluate(model_paths, use_remap=False, iters=None, custom_gt=None, custom_ma
     print("")
 
     for scene_dir in model_paths:
+        #try:
         print("Scene:", scene_dir)
         full_dict[scene_dir] = {}
         per_view_dict[scene_dir] = {}
         full_dict_polytopeonly[scene_dir] = {}
         per_view_dict_polytopeonly[scene_dir] = {}
 
-        test_dir = Path(scene_dir) / "test"
+        test_dir = Path(scene_dir) # / "test"
 
         for method in os.listdir(test_dir):
             if iters is not None:
@@ -86,6 +87,7 @@ def evaluate(model_paths, use_remap=False, iters=None, custom_gt=None, custom_ma
                 if mask_path is not None and len(mask_path) > 0:
                     mask = Image.open(mask_path)
                     mask = tf.to_tensor(mask).unsqueeze(0)[:, :3, :, :].cuda()
+                    # print(mask.shape)
                 if reverse_mask:
                     mask = 1 - mask
                     print(mask[mask == 1].sum())
@@ -97,6 +99,7 @@ def evaluate(model_paths, use_remap=False, iters=None, custom_gt=None, custom_ma
             ssims = []
             psnrs = []
             lpipss = []
+            # edge_l1s = []
             image_namess = []
             for i in range(math.ceil(num_rendered / N)):
                 renders, gts, image_names = readImages(renders_dir, gt_dir, renders_list, i*N, min(num_rendered, (i+1)*N))
@@ -106,10 +109,12 @@ def evaluate(model_paths, use_remap=False, iters=None, custom_gt=None, custom_ma
                     ssims.append(ssim(renders[idx], gts[idx], mask=mask))
                     psnrs.append(psnr(renders[idx], gts[idx], mask=mask))
                     lpipss.append(lpips(renders[idx], gts[idx], net_type='vgg'))
+                    # edge_l1s.append(artifact_sensitive_l1(renders[idx], gts[idx], mask=mask))
 
             print("  SSIM : {:>12.7f}".format(torch.tensor(ssims).mean(), ".5"))
             print("  PSNR : {:>12.7f}".format(torch.tensor(psnrs).mean(), ".5"))
             print("  LPIPS: {:>12.7f}".format(torch.tensor(lpipss).mean(), ".5"))
+            # print("  Edge L1: {:>12.7f}".format(torch.tensor(edge_l1s).mean(), ".5"))
             print("")
 
             full_dict[scene_dir][method].update({"SSIM": torch.tensor(ssims).mean().item(),
@@ -123,6 +128,8 @@ def evaluate(model_paths, use_remap=False, iters=None, custom_gt=None, custom_ma
             json.dump(full_dict[scene_dir], fp, indent=True)
         with open(scene_dir + "/per_view.json", 'w') as fp:
             json.dump(per_view_dict[scene_dir], fp, indent=True)
+        # except:
+        #     print("Unable to compute metrics for model", scene_dir)
 
 if __name__ == "__main__":
     device = torch.device("cuda:0")
