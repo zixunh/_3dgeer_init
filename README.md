@@ -109,6 +109,8 @@ The full CUDA implementation can be found here: [./submodules/geer-rasterizer/](
 
 #### Key Insights: Fixing the Math Behind Gaussian Association
 
+#### Key Insights: Fixing the Math Behind Gaussian Association
+
 - Particle Bounding Frustum: Efficient AABB for ray–particle association. (See [paper](https://arxiv.org/pdf/2505.24053) Appendix D for the math.)
 
   <div align="center">
@@ -167,6 +169,7 @@ To train 3DGEER on scannet++ data:
 bash ./scripts/train_scnt.sh
 ```
 > full training codes and scripts will be released soon.
+> full training codes and scripts will be released soon.
 
 ### 3. Rendering & Evaluation
 To render high-quality images and compute PSNR/SSIM/LPIPS:
@@ -209,6 +212,7 @@ bash scripts/render_scnt.sh truck data/tt/datasets ckpt/tt PH
 bash scripts/eval_scnt.sh truck data/tt/datasets ckpt/tt PH
 bash scripts/eval_scnt.sh truck data/tt/datasets ckpt/tt BEAP
 ```
+> Please ensure that the corresponding ground truth is used. For example, evaluating extreme KB images using the original KB images as ground truth is invalid due to mismatched distortion parameters.
 > Please ensure that the corresponding ground truth is used. For example, evaluating extreme KB images using the original KB images as ground truth is invalid due to mismatched distortion parameters.
 
 ### 4. Available Checkpoints
