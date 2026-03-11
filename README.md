@@ -22,13 +22,12 @@ Bosch Center for AI, Bosch Research North America
 </a>
 
 <a href="https://github.com/boschresearch/3dgeer/tree/gsplat-geer">
-  <img src="https://img.shields.io/badge/gsplat--geer-Extension-purple" alt="Project Page">
+  <img src="https://img.shields.io/badge/gsplat-Extension-purple" alt="Project Page">
 </a>
 
 <a href="https://www.youtube.com/watch?v=Grl9jSMIgds">
   <img src="https://img.shields.io/badge/Video-YouTube-yellow" alt="Video">
 </a>
-
 
 <p align="center">
   <a href='https://zixunh.github.io/3d-geer'>
