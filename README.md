@@ -195,7 +195,7 @@ https://huggingface.co/datasets/ZixunH/3DGEER_ckpt
 </p>
 
 ## ⛽️Contributing
-Feel free to drop a pull request whenever!
+Feel free to drop a [pull request](https://github.com/boschresearch/3dgeer/pulls) whenever!
 
 ## 👀Visuals ([More](https://zixunh.github.io/3d-geer))
 

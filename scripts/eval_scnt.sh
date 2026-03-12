@@ -17,9 +17,9 @@ echo "Mode: $MODE"
 
 if [ "$MODE" = "BEAP" ]; then
 
-BEAP_DIR_EVAL="beap_fov_${FOVMOD_EVAL}_step_${STEP_EVAL}/"
-EVAL_MASK_FN="fov_${FOVMOD_EVAL}_step_${STEP_EVAL}_mask.png"
-python data/scnt/scnt_kb2beap.py --path "$DATASET_DIR" --dst "$BEAP_DIR_EVAL" --step "$STEP_EVAL" --fov_mod "$FOVMOD_EVAL" --mask_dst "$EVAL_MASK_FN"
+BEAP_DIR_EVAL=beap_fov_${FOVMOD_EVAL}_step_${STEP_EVAL}/
+EVAL_MASK_FN=fov_${FOVMOD_EVAL}_step_${STEP_EVAL}_mask.png
+python data/scnt/scnt_kb2beap.py --path ${DATASET_DIR} --dst ${BEAP_DIR_EVAL} --step ${STEP_EVAL} --fov_mod ${FOVMOD_EVAL} --mask_dst ${EVAL_MASK_FN}
 
 echo "Rendering BEAP space"
 
@@ -45,10 +45,9 @@ python data/scnt/scnt_beap2kb.py --path ${DATASET_DIR} \
                      --dst ${OUTPUT_DIR}/test/ours_${ITERS_NUM}/renders_remap \
                      --step ${STEP_EVAL} --fov_mod ${FOVMOD_EVAL} --gridmap_restrict
 
-# evaluation
 python metrics.py \
-    -m $OUTPUT_DIR --use_remap \
-    --iters $ITERS_NUM \
+    -m ${OUTPUT_DIR} --use_remap \
+    --iters ${ITERS_NUM} \
 
 elif [ "$MODE" = "KB" ]; then
 
