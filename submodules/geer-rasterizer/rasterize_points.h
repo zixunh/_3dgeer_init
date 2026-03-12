@@ -44,7 +44,8 @@ RasterizeGaussiansCUDA(
 	const bool antialiasing,
 	const int mode,
 	const float near_threshold,
-	const bool debug);
+	const bool debug,
+	const int asso_mode = 0);
 
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
  RasterizeGaussiansBackwardCUDA(

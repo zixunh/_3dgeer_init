@@ -856,7 +856,8 @@ __global__ void preprocessCUDA(int P, int D, int M,
 	bool prefiltered,
 	bool antialiasing,
 	int mode,
-	float near_threshold)
+	float near_threshold,
+	int asso_mode)
 {
 	auto idx = cg::this_grid().thread_rank();
 	if (idx >= P)
@@ -890,15 +891,22 @@ __global__ void preprocessCUDA(int P, int D, int M,
 
 	points_xyz_view[idx] = p_view;
 
-	// Compute exact and tight Particle Bounding Frustum (PBF);
-	// see details in 3DGEER paper: https://openreview.net/pdf?id=4voMNlRWI7, Eq.10 (mathmatical proof in Sec.D.1)
+	// Compute bounding region for this Gaussian using the selected association mode:
+	//   asso_mode == 0: Particle Bounding Frustum (PBF) - exact and tight (default)
+	//   asso_mode == 1: AABB via Elliptical Weighted Average (EWA)
+	//   asso_mode == 2: AABB via Unscented Transform (UT)
+	// Any value outside [0, 2] falls back to PBF.
 	float4 tan_xxyy; // clamped tan value in x / y dir, i.e., tan_theta, tan_phi
-	// if asso use PBF
-	if (!computePBF(scales[idx], scale_modifier, R_view, p_view, cutoff, tan_xxyy, tan_fovx, tan_fovy, h_opacity[idx].x)) return;
-	// else if
-	// bool tighten = true;
-	// if (!computeAABB_EWA(scales[idx], scale_modifier, R_view, p_view, cutoff, tan_xxyy, tan_fovx, tan_fovy, h_opacity[idx].x, tighten)) return;
-	// if (!computeAABB_UT(scales[idx], scale_modifier, R_view, p_view, cutoff, tan_xxyy, tan_fovx, tan_fovy, h_opacity[idx].x, tighten)) return;
+	bool tighten = true;
+	if (asso_mode == 1) {
+		if (!computeAABB_EWA(scales[idx], scale_modifier, R_view, p_view, cutoff, tan_xxyy, tan_fovx, tan_fovy, h_opacity[idx].x, tighten)) return;
+	} else if (asso_mode == 2) {
+		if (!computeAABB_UT(scales[idx], scale_modifier, R_view, p_view, cutoff, tan_xxyy, tan_fovx, tan_fovy, h_opacity[idx].x, tighten)) return;
+	} else {
+		// Default: asso_mode == 0, use PBF
+		// see details in 3DGEER paper: https://openreview.net/pdf?id=4voMNlRWI7, Eq.10 (mathmatical proof in Sec.D.1)
+		if (!computePBF(scales[idx], scale_modifier, R_view, p_view, cutoff, tan_xxyy, tan_fovx, tan_fovy, h_opacity[idx].x)) return;
+	}
 
 	if ((tan_xxyy.y - tan_xxyy.x) * (tan_xxyy.w - tan_xxyy.z) == 0)
 		return;
@@ -1213,7 +1221,8 @@ void FORWARD::preprocess(int P, int D, int M,
 	bool prefiltered,
 	bool antialiasing,
 	int mode,
-	float near_threshold)
+	float near_threshold,
+	int asso_mode)
 {
 	preprocessCUDA<NUM_CHANNELS> << <(P + 255) / 256, 256 >> > (
 		P, D, M,
@@ -1245,6 +1254,7 @@ void FORWARD::preprocess(int P, int D, int M,
 		prefiltered,
 		antialiasing,
 		mode,
-		near_threshold
+		near_threshold,
+		asso_mode
 		);
 }

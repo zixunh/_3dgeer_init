@@ -276,7 +276,8 @@ int CudaRasterizer::Rasterizer::forward(
 	int* radii,
 	int* range_len,
 	float near_threshold,
-	bool debug)
+	bool debug,
+	int asso_mode)
 {
 	cudaEvent_t overallStart, overallStop;
 	cudaEvent_t preprocessStart, preprocessStop;
@@ -370,7 +371,8 @@ int CudaRasterizer::Rasterizer::forward(
 		prefiltered,
 		antialiasing,
 		mode,
-		near_threshold
+		near_threshold,
+		asso_mode
 	), debug)
 
 	cudaEventRecord(preprocessStop, 0);

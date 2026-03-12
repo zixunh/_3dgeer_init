@@ -25,7 +25,7 @@ from utils.image_utils import psnr
 import numpy as np
 import cv2
 
-def render_set(model_path, mask_tensor, name, iteration, views, gaussians, pipeline, background, train_test_exp, near_threshold=0.2):
+def render_set(model_path, mask_tensor, name, iteration, views, gaussians, pipeline, background, train_test_exp, near_threshold=0.2, asso_mode=0):
     max_allocated_memory_before = torch.cuda.max_memory_allocated()
     print(f"Max Allocated Memory Before Rendering: {max_allocated_memory_before} bytes")
     torch.cuda.empty_cache()
@@ -50,7 +50,7 @@ def render_set(model_path, mask_tensor, name, iteration, views, gaussians, pipel
     range_lens = []
     for idx, view in enumerate(tqdm(views, desc="Rendering progress")):
         render_start = time.time()
-        rendering_pkg = render(view, gaussians, pipeline, background, use_trained_exp=train_test_exp, near_threshold=near_threshold)
+        rendering_pkg = render(view, gaussians, pipeline, background, use_trained_exp=train_test_exp, near_threshold=near_threshold, asso_mode=asso_mode)
         render_end = time.time()
 
         rendering = rendering_pkg["render"]
@@ -120,7 +120,7 @@ def render_set(model_path, mask_tensor, name, iteration, views, gaussians, pipel
 
 def render_sets(dataset : ModelParams, iteration : int, pipeline : PipelineParams, skip_train : bool, skip_test : bool, \
                 fov_mod: float, sample_step: float, render_model: str, \
-                focal_scaling: float, distortion_scaling: float, mirror_shift: float, raymap_path: str, mask_path: str, near_threshold: float = 0.2):
+                focal_scaling: float, distortion_scaling: float, mirror_shift: float, raymap_path: str, mask_path: str, near_threshold: float = 0.2, asso_mode: int = 0):
     with torch.no_grad():
         gaussians = GaussianModel(dataset.sh_degree)
         dataset.fov_mod = fov_mod
@@ -145,11 +145,11 @@ def render_sets(dataset : ModelParams, iteration : int, pipeline : PipelineParam
         background = torch.tensor(bg_color, dtype=torch.float32, device="cuda")
 
         if not skip_train:
-             render_set(dataset.model_path, valid_mask, "train", scene.loaded_iter, scene.getTrainCameras(), gaussians, pipeline, background, dataset.train_test_exp, near_threshold)
+             render_set(dataset.model_path, valid_mask, "train", scene.loaded_iter, scene.getTrainCameras(), gaussians, pipeline, background, dataset.train_test_exp, near_threshold, asso_mode)
 
         if not skip_test:
              dataset.train_test_exp = False
-             render_set(dataset.model_path, valid_mask, "test", scene.loaded_iter, scene.getTestCameras(), gaussians, pipeline, background, dataset.train_test_exp, near_threshold)
+             render_set(dataset.model_path, valid_mask, "test", scene.loaded_iter, scene.getTestCameras(), gaussians, pipeline, background, dataset.train_test_exp, near_threshold, asso_mode)
 
 if __name__ == "__main__":
     # Set up command line argument parser
@@ -169,12 +169,16 @@ if __name__ == "__main__":
     parser.add_argument("--sample_step", type=float, default = None)
     parser.add_argument("--fov_mod", type=float, default = None)
     parser.add_argument("--near_threshold", type=float, default = 0.2)
+    parser.add_argument("--asso_mode", type=int, default = 0,
+                        help="Association mode: 0=PBF (default), 1=EWA, 2=UT")
     args = get_combined_args(parser)
     for k in ["fov_mod", "sample_step", "distortion_scaling", "focal_scaling", "mirror_shift", "raymap_path", "mask_path"]:
         if not hasattr(args, k):
             setattr(args, k, None)
     if not hasattr(args, "near_threshold"):
         setattr(args, "near_threshold", 0.2)
+    if not hasattr(args, "asso_mode"):
+        setattr(args, "asso_mode", 0)
     print("Rendering " + args.model_path)
 
     # Initialize system state (RNG)
@@ -182,4 +186,4 @@ if __name__ == "__main__":
 
     render_sets(model.extract(args), args.iteration, pipeline.extract(args), args.skip_train, args.skip_test, \
                 args.fov_mod, args.sample_step, args.render_model, \
-                args.focal_scaling, args.distortion_scaling, args.mirror_shift, args.raymap_path, args.mask_path, args.near_threshold)
+                args.focal_scaling, args.distortion_scaling, args.mirror_shift, args.raymap_path, args.mask_path, args.near_threshold, args.asso_mode)

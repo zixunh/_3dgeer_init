@@ -54,7 +54,8 @@ namespace FORWARD
 		bool prefiltered,
 		bool antialiasing,
 		int mode,
-		float near_threshold = 0.2f);
+		float near_threshold = 0.2f,
+		int asso_mode = 0);
 
 	// Main rasterization method.
 	void render(
