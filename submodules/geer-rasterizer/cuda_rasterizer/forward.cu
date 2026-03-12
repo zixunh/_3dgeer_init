@@ -650,10 +650,12 @@ renderCUDA(
 			float4 b_xxyy = collected_pbf_tan[j];
 
 			// acceleration in RenderCUDA; still has GPU bubble
-			if (((rayf.x / rayf.z) < b_xxyy.x) || ((rayf.x / rayf.z) > b_xxyy.y))
-				continue;
-			if (((rayf.y / rayf.z) < b_xxyy.z) || ((rayf.y / rayf.z) > b_xxyy.w))
-				continue;
+			if (mode==1) {
+				if (((rayf.x / rayf.z) < b_xxyy.x) || ((rayf.x / rayf.z) > b_xxyy.y))
+					continue;
+				if (((rayf.y / rayf.z) < b_xxyy.z) || ((rayf.y / rayf.z) > b_xxyy.w))
+					continue;
+			}
 
 			float3 xyz = collected_xyz[j];
 			float2 h_o = collected_h_opacity[j];

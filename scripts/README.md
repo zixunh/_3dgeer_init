@@ -34,6 +34,11 @@ For the ray mapping used in this process (to reproduce the numbers in Table K.2)
 
 https://huggingface.co/yuliangguo/depth-any-camera/blob/main/scannetpp_dac_swinl_indoor_2025_01.zip
 
+Or run:
+```python
+  python data/scnt/scnt_raymap_dac.py 
+```
+
 Qualitative comparisons can be found in Figure K.4.
 
 <p align="center">

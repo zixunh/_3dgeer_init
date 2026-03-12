@@ -1,109 +1,140 @@
 import os
 import numpy as np
+import re
+import yaml
+import sys
+import glob
+import json
 import cv2
-from PIL import Image
 from tqdm import tqdm
-from pathlib import Path
+import matplotlib.pyplot as plt
 from argparse import ArgumentParser
-from scene.colmap_loader import read_next_bytes, CAMERA_MODEL_IDS
 
+import torch
+import torch.nn as nn
+torch.autograd.set_detect_anomaly(True)
 
-def read_intrinsics_text(path):
-    """
-    Taken from https://github.com/colmap/colmap/blob/dev/scripts/python/read_write_model.py
-    """
-    with open(path, "r") as fid:
-        while True:
-            line = fid.readline()
-            if not line:
-                break
-            line = line.strip()
-            if len(line) > 0 and line[0] != "#":
-                elems = line.split()
-                camera_id = int(elems[0])
-                model = elems[1]
-                width = int(elems[2])
-                height = int(elems[3])
-                params = np.array(tuple(map(float, elems[4:])))
-    return camera_id, model, width, height, params
+"""
+    Grid search method to prepare fisheye grid for Scannet++ dataset.
+    Each scene has a different camera, so the lookup table is scene-specific.
+"""
 
-
-def read_intrinsics_binary(path_to_model_file):
-    """
-    see: src/base/reconstruction.cc
-        void Reconstruction::WriteCamerasBinary(const std::string& path)
-        void Reconstruction::ReadCamerasBinary(const std::string& path)
-    """
-    with open(path_to_model_file, "rb") as fid:
-        num_cameras = read_next_bytes(fid, 8, "Q")[0]
-        camera_properties = read_next_bytes(
-            fid, num_bytes=24, format_char_sequence="iiQQ")
-        camera_id = camera_properties[0]
-        model_id = camera_properties[1]
-        width = camera_properties[2]
-        height = camera_properties[3]
-        num_params = CAMERA_MODEL_IDS[model_id].num_params
-        params = read_next_bytes(fid, num_bytes=8*num_params,
-                                    format_char_sequence="d"*num_params)
-    return camera_id, model_id, width, height, params
-
-def focal2halffov2(focal, pixels):
-    return pixels / 2 / focal
-
-def colmap_main(args):
-    root_dir = args.path
-    camera_dir = Path(root_dir) / args.camera_config
-
-    if os.path.exists(camera_dir) and args.camera_config.endswith(".txt"):
-        _, _, width, height, params = read_intrinsics_text(camera_dir)
-        print(params)
-    elif os.path.exists(camera_dir) and args.camera_config.endswith(".bin"):
-        _, _, width, height, params = read_intrinsics_binary(camera_dir)
-        print(params)
-    else:
-        raise ValueError("Camera intrinsics file not found")
-
-    # adjust fx, fy, cx, cy by the actual image size
-    if args.r == -1:
-        ratio = 1.0
-    else:
-        ratio = 1 / args.r
+def cam2image(pcd):
+    x = pcd[:, 0] / pcd[:, 2]
+    y = pcd[:, 1] / pcd[:, 2]
+    z = pcd[:, 2]
     
-    fx = params[0] * ratio
-    fy = params[1] * ratio
-
-    FoVx = min(focal2halffov2(fx, width) * args.fov_mod, np.pi / 2)
-    FoVy = min(focal2halffov2(fy, height) * args.fov_mod, np.pi / 2)
-    print("FOVx in deg: ", 2 * FoVx * 180 / np.pi)
-    print("FOVy in deg: ", 2 * FoVy * 180 / np.pi)
-
-    width = int(width * ratio)
-    height = int(height * ratio)
+    # TODO: the OPEVCV scaling is applied on theta atan(r)?
+    r = torch.sqrt(x**2 + y**2)
+    theta = torch.arctan(r)
+    theta_d = theta * (1 + k1*theta*theta + k2*theta**4 + k3*theta**6 + k4*theta**8)
     
-    # Use prepared fisheye grid map by DAC https://github.com/yuliangguo/depth_any_camera
-    try:
-        grid_map_file = Path(args.path) / "grid_fisheye.npy"
-        grid_fisheye = np.load(grid_map_file)
-        print("grid map file: ", grid_map_file)
-    except:
-        if args.gridmap_restrict:
-            raise ValueError("Grid map restrict is not supported")
-        else:
-            grid_fisheye = np.load("./gridmap/scannetpp/grid_fisheye.npy")
-            print("WARNING: Grid map file may not match with the camera intrinsic;", grid_map_file)
+    x = theta_d * x / (r+1e-9)
+    y = theta_d * y / (r+1e-9)
+    
 
-    # grid_isnan = cv2.resize(grid_fisheye[:, :, 3], (width, height), interpolation=cv2.INTER_NEAREST)
-    grid_fisheye = cv2.resize(grid_fisheye[:, :, :3], (width, height))
-    np.save(Path(args.path) / 'raymap_fisheye.npy', grid_fisheye) # only kb ray
+    """
+        Projection to image coordinates using intrinsic parameters
+    """
+    x = fx * x + cx
+    y = fy * y + cy
 
-if __name__ == "__main__":
+    return x, y, z
+
+def chunk(grid):
+    x = grid[0, :]
+    y = grid[1, :]
+
+    x = (x - cx) / fx
+    y = (y - cy) / fy
+    dist = torch.sqrt(x*x + y*y)
+    
+    indx = torch.abs(map_dist[:, 1:] - dist[None, :]).argmin(dim=0)    
+    x = x * map_dist[indx, 0] / map_dist[indx, 1]
+    y = y * map_dist[indx, 0] / map_dist[indx, 1]
+    
+    # z has closed form solution sqrt(1 - z^2) / z = sqrt(x^2 + y^2)
+    z = 1 / torch.sqrt(1 + x**2 + y**2)
+
+    xy = torch.stack((x, y))
+    xy *= z
+    return xy
+
+if __name__=="__main__":
     parser = ArgumentParser()
-    parser.add_argument('-r', type=int, default=-1)
-
-    parser.add_argument('--path', type=str, default="/media/scannetpp/demo/0a5c013435/dslr/")
-    parser.add_argument('--camera_config', type=str, default="colmap/cameras_fish.txt")
-    parser.add_argument('--step', type=float, default=2e-3)
-    parser.add_argument('--fov_mod', type=float, default=1.3)
-    parser.add_argument('--gridmap_restrict', action='store_true', default=False)
+    parser.add_argument('--path', type=str, default="/media/scannetpp/demo/")
+    parser.add_argument('--scenes', type=str, default="1f7cbbdde1/dslr,4ef75031e3/dslr")
     args = parser.parse_args()
-    colmap_main(args)
+    target_scene_names = args.scenes.split(",")  # if not empty, only process these scenes
+    scannetpp_data_path = args.path
+
+    scene_dirs = sorted(glob.glob(scannetpp_data_path + '/*'))
+    
+    for scene_dir in scene_dirs:
+        scene_name = os.path.basename(scene_dir)
+        if len(target_scene_names) > 0 and scene_name not in target_scene_names:
+            continue
+        
+        print(f"Processing {scene_name}")
+        scene_transform_file = os.path.join(scene_dir, 'nerfstudio/transforms.json')
+        scene_info = json.load(open(scene_transform_file))
+    
+        k1 = scene_info['k1']
+        k2 = scene_info['k2']
+        k3 = scene_info['k3']
+        k4 = scene_info['k4']
+        fx = scene_info['fl_x'] / 2
+        fy = scene_info['fl_y'] / 2
+        cx = scene_info['cx'] / 2
+        cy = scene_info['cy'] / 2
+        W = scene_info['w'] / 2
+        H = scene_info['h'] / 2
+        u, v = np.meshgrid(np.arange(W), np.arange(H))
+        u = u.reshape(-1).astype(dtype=np.float32) + 0.5    # add half pixel
+        v = v.reshape(-1).astype(dtype=np.float32) + 0.5
+        pixels = np.stack((u, v, np.ones_like(u)), axis=0)
+        grid = torch.from_numpy(pixels)
+
+        map_dist = []
+        z_dist = []
+        # ATTENTION, the range of ro2 = (x/z)^2 + (y/z)^2 can go beyond 1.0 for fisheye cameras, set it properly
+        for ro in np.linspace(0.0, 15, 500000):
+            theta = np.arctan(ro)
+            theta_d = theta * (1 + k1*theta*theta + k2*theta**4 + k3*theta**6 + k4*theta**8)
+            map_dist.append([ro, theta_d])
+            
+        map_dist = np.array(map_dist).astype(np.float32)
+        # print(map_dist)
+        map_dist = torch.from_numpy(map_dist).cuda()
+
+        xys = []
+        for i in tqdm(range(H)):
+            xy = chunk(grid[:, i*W:(i+1)*W].cuda())
+            xys.append(xy.permute(1, 0))
+            # if i % 10 == 0:
+            #     print(i)
+        xys = torch.cat(xys, dim=0)
+
+        z = torch.sqrt(1. - torch.norm(xys, dim=1, p=2) ** 2)
+        isnan = z.isnan()
+        z[isnan] = 1.
+        pcd = torch.cat((xys, z[:, None], isnan[:, None]), dim=1)
+        print("saving grid")
+        np.save(os.path.join(scene_dir, 'raymap_fisheye.npy'), pcd.detach().cpu().numpy().reshape(H, W, 4))
+
+        """
+            Treating each ray as a point on an unit sphere, apply forward distortion and project to compute the approximation error using the lookup table
+        """
+        
+        # import ipdb; ipdb.set_trace()
+        # show error map
+        x, y, d = cam2image(pcd[:, :3])
+
+        error = (x - grid[0].cuda()) ** 2 + (y - grid[1].cuda()) ** 2
+
+        error_map = error.reshape(H, W).detach().cpu().numpy()
+        error_map = np.clip(error_map, 0, 30)
+        plt.imshow(error_map)
+        print(f'max error: {error_map.max()}')
+        # plt.show()
+        plt.savefig(os.path.join(scene_dir, 'error_map.png'))
