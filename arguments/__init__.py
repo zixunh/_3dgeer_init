@@ -58,6 +58,10 @@ class ModelParams(ParamGroup):
         self.train_test_exp = False
         self.data_device = "cpu" #"cuda"
         self.eval = False
+        self.render_model = 'BEAP'
+        self.focal_scaling = 1.0
+        self.distortion_scaling = 1.0
+        self.mirror_shift = 0.0
         super().__init__(parser, "Loading Parameters", sentinel)
 
     def extract(self, args):
