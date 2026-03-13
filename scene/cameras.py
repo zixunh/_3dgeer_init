@@ -16,6 +16,39 @@ from utils.graphics_utils import getWorld2View2, getProjectionMatrix, fov2focal
 from utils.general_utils import PILtoTorch
 import cv2
 
+def read_intrinsics_text(path):
+    """
+    Taken from https://github.com/colmap/colmap/blob/dev/scripts/python/read_write_model.py
+    """
+    with open(path, "r") as fid:
+        while True:
+            line = fid.readline()
+            if not line:
+                break
+            line = line.strip()
+            if len(line) > 0 and line[0] != "#":
+                elems = line.split()
+                camera_id = int(elems[0])
+                model = elems[1]
+                width = int(elems[2])
+                height = int(elems[3])
+                params = np.array(tuple(map(np.float64, elems[4:])))
+    return camera_id, model, width, height, params
+
+def fov2tan(fovx, fovy, interval):
+    theta_arr = np.arange(interval / 2, fovx, interval)
+    theta_arr = np.sort(np.concatenate((-theta_arr, theta_arr)))
+    phi_arr = np.arange(interval / 2, fovy, interval)
+    phi_arr = np.sort(np.concatenate((-phi_arr, phi_arr)))
+
+    sin_t = np.sin(theta_arr)
+    cos_t = np.cos(theta_arr)
+    sin_p = np.sin(phi_arr)[:, None]
+    cos_p = np.cos(phi_arr)[:, None]
+    tan_t = sin_t / cos_t
+    tan_p = sin_p / cos_p
+    return tan_t, tan_p
+
 class Camera(nn.Module):
     def __init__(self, resolution, colmap_id, R, T, FoVx, FoVy, 
                  focal_x, focal_y, principal_x, principal_y, distortion_coeffs,
@@ -217,7 +250,6 @@ class MiniCam:
         return m / (1+xi*(z/(torch.abs(z)))*(1+m**2)**0.5)
     
     def get_viewpoint_mask(self, ref_camera_dir):
-        from prepare_beap import read_intrinsics_text, fov2tan
         _, _, width, height, params = read_intrinsics_text(ref_camera_dir)
         fx = params[0]
         fy = params[1]
