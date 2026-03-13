@@ -81,7 +81,7 @@ This repository contains the official authors implementation associated with the
 
 ## 📷3DGEER-CUDA-Rasterizer
 The full CUDA implementation can be found here: [./submodules/geer-rasterizer/](./submodules/geer-rasterizer/).
-#### Key Insights: Fixing the Math Behind Gaussian Rendering
+#### Key Insight 1: Fixing the Math Behind Gaussian Rendering
 
 - Ray–Gaussian Integral (Forward & Backward): Analytical forward rendering and numerical stable backward gradient computation. (See [paper](https://arxiv.org/pdf/2505.24053) Appendix C for the math.)
 
@@ -89,7 +89,7 @@ The full CUDA implementation can be found here: [./submodules/geer-rasterizer/](
     <img src="assets/forward2backward.gif" width="60%">
   </div>
 
-#### Key Insights: Fixing the Math Behind Gaussian Association
+#### Key Insight 2: Fixing the Math Behind Gaussian Association
 
 - Particle Bounding Frustum: Efficient AABB for ray–particle association. (See [paper](https://arxiv.org/pdf/2505.24053) Appendix D for the math.)
 
