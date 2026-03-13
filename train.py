@@ -38,6 +38,12 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
     dataset.fov_mod = fov_mod
     dataset.sample_step = sample_step
+    dataset.raymap = None
+    # Set safe defaults (e.g. when training, not rendering).
+    dataset.render_model = getattr(dataset, 'render_model', 'BEAP')
+    dataset.focal_scaling = getattr(dataset, 'focal_scaling', 1.0)
+    dataset.distortion_scaling = getattr(dataset, 'distortion_scaling', 1.0)
+    dataset.mirror_shift = getattr(dataset, 'mirror_shift', 0.0)
     scene = Scene(dataset, gaussians, shuffle=False)
 
     gaussians.training_setup(opt)
@@ -258,7 +264,6 @@ if __name__ == "__main__":
     parser.add_argument('--detect_anomaly', action='store_true', default=False)
     parser.add_argument("--test_iterations", nargs="+", type=int, default=[500, 1200, 2000, 2800, 3000, 3500, 4000, 4500, 5000, 5500, 6000, 6500, 7_000, 7500, 8000, 9000, 10000, 11000, 12000, 13000, 14000, 15000, 18000, 21000, 24000, 27000, 29000, 30_000])
     parser.add_argument("--save_iterations", nargs="+", type=int, default=[7_000, 30_000])
-    parser.add_argument("--render_model", type=str, default = 'BEAP')
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument('--disable_viewer', action='store_true', default=False)
     parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[])

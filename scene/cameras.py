@@ -16,6 +16,39 @@ from utils.graphics_utils import getWorld2View2, getProjectionMatrix, fov2focal
 from utils.general_utils import PILtoTorch
 import cv2
 
+def read_intrinsics_text(path):
+    """
+    Taken from https://github.com/colmap/colmap/blob/dev/scripts/python/read_write_model.py
+    """
+    with open(path, "r") as fid:
+        while True:
+            line = fid.readline()
+            if not line:
+                break
+            line = line.strip()
+            if len(line) > 0 and line[0] != "#":
+                elems = line.split()
+                camera_id = int(elems[0])
+                model = elems[1]
+                width = int(elems[2])
+                height = int(elems[3])
+                params = np.array(tuple(map(np.float64, elems[4:])))
+    return camera_id, model, width, height, params
+
+def fov2tan(fovx, fovy, interval):
+    theta_arr = np.arange(interval / 2, fovx, interval)
+    theta_arr = np.sort(np.concatenate((-theta_arr, theta_arr)))
+    phi_arr = np.arange(interval / 2, fovy, interval)
+    phi_arr = np.sort(np.concatenate((-phi_arr, phi_arr)))
+
+    sin_t = np.sin(theta_arr)
+    cos_t = np.cos(theta_arr)
+    sin_p = np.sin(phi_arr)[:, None]
+    cos_p = np.cos(phi_arr)[:, None]
+    tan_t = sin_t / cos_t
+    tan_p = sin_p / cos_p
+    return tan_t, tan_p
+
 class Camera(nn.Module):
     def __init__(self, resolution, colmap_id, R, T, FoVx, FoVy, 
                  focal_x, focal_y, principal_x, principal_y, distortion_coeffs,
@@ -172,8 +205,6 @@ class Camera(nn.Module):
 
 class MiniCam:
     def __init__(self, width, height, fovy, fovx, znear, zfar, world_view_transform, full_proj_transform, sample_step):
-        self.image_width = width
-        self.image_height = height    
         self.FoVy = fovy
         self.FoVx = fovx
         self.znear = znear
@@ -183,6 +214,14 @@ class MiniCam:
         view_inv = torch.inverse(self.world_view_transform)
         self.camera_center = view_inv[3][:3]
         self.sample_step = sample_step
+        # Attributes required by the render function; sibr viewer uses BEAP mode.
+        self.render_model = 0
+        self.focal_x = None
+        self.focal_y = None
+        self.principal_x = None
+        self.principal_y = None
+        self.distortion_coeffs = None
+        self.raymap = None
         arr_theta, arr_phi = self.fov_sample2ray(self.FoVx/2, self.FoVy/2, sample_step)
         
         cos_theta = torch.cos(arr_theta)
@@ -194,6 +233,9 @@ class MiniCam:
         self.tan_phi = torch.tan(arr_phi)#.to(self.data_device)
         self.mirror_transformed_tan_theta = self.mirror_transform(self.tan_theta, cos_theta)
         self.mirror_transformed_tan_phi = self.mirror_transform(self.tan_phi, cos_phi)
+        # Derive image dimensions from the ray-grid sizes, consistent with Camera BEAP mode.
+        self.image_width = self.tan_theta.shape[0]
+        self.image_height = self.tan_phi.shape[0]
 
     @staticmethod
     def fov_sample2ray(fovx, fovy, interval):
@@ -209,7 +251,6 @@ class MiniCam:
         return m / (1+xi*(z/(torch.abs(z)))*(1+m**2)**0.5)
     
     def get_viewpoint_mask(self, ref_camera_dir):
-        from prepare_beap import read_intrinsics_text, fov2tan
         _, _, width, height, params = read_intrinsics_text(ref_camera_dir)
         fx = params[0]
         fy = params[1]
