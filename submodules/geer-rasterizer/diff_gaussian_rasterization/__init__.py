@@ -100,10 +100,11 @@ class _RasterizeGaussians(torch.autograd.Function):
         return color, radii, invdepths, kernel_times, ranges
 
     @staticmethod
-    def backward(ctx, grad_out_color, _, grad_out_depth):
+    def backward(ctx, grad_out_color, grad_radii, grad_out_depth, grad_kernel_times, grad_ranges):
         """Backward pass: propagate gradients from pixel loss to Gaussian parameters.
 
-        Inputs grad_out_color [C,H,W] and grad_out_depth [1,H,W] (ignored middle output).
+        Inputs grad_out_color [C,H,W] and grad_out_depth [1,H,W]; grad_radii,
+        grad_kernel_times, and grad_ranges are unused (non-differentiable outputs).
         Returns gradients for (means3D, means2D, sh, colors_precomp, opacities, scales, rotations, None).
         """
 
