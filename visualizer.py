@@ -19,6 +19,7 @@ from arguments import ModelParams, PipelineParams, OptimizationParams, get_combi
 from gaussian_renderer import render, network_gui, GaussianModel
 from scene import Scene
 from utils.general_utils import safe_state
+from utils.image_utils import match_mask_to_image
 
 
 def visualize(dataset, opt, pipe, iteration, sample_step, fov_mod, mask_path, sibr_mask_refcam=None):
@@ -76,7 +77,7 @@ def visualize(dataset, opt, pipe, iteration, sample_step, fov_mod, mask_path, si
                             net_image[net_mask == 0] = 0.0
 
                         if valid_mask is not None:
-                            net_image[valid_mask == 0] = 0.0
+                            net_image[match_mask_to_image(valid_mask, net_image) == 0] = 0.0
 
                         net_image = torch.nn.functional.interpolate(
                             net_image[None, ...], (height, width), mode='bilinear')[0]
