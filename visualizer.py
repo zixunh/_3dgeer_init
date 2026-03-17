@@ -21,7 +21,7 @@ from scene import Scene
 from utils.general_utils import safe_state
 
 
-def visualize(dataset, opt, pipe, iteration, sample_step, mask_path, sibr_mask_refcam=None):
+def visualize(dataset, opt, pipe, iteration, sample_step, fov_mod, mask_path, sibr_mask_refcam=None):
     """
     Load a trained checkpoint and serve the SIBR online viewer via network_gui.
     This mirrors the network_gui loop from train.py but runs indefinitely after
@@ -30,7 +30,7 @@ def visualize(dataset, opt, pipe, iteration, sample_step, mask_path, sibr_mask_r
     with torch.no_grad():
         gaussians = GaussianModel(dataset.sh_degree)
 
-        dataset.fov_mod = getattr(dataset, 'fov_mod', None)
+        dataset.fov_mod = fov_mod
         dataset.sample_step = sample_step
         dataset.raymap = None
         dataset.render_model = getattr(dataset, 'render_model', 'BEAP')
@@ -111,14 +111,19 @@ if __name__ == "__main__":
 
     args = get_combined_args(parser)
 
-    # Forward optional render-time attributes that may not exist in the cfg_args
+    # Ensure optional attributes are set on args with sensible defaults.
+    # get_combined_args() skips None-valued command-line arguments during the
+    # cfg_args merge, so attributes absent from cfg_args may be missing entirely
+    # unless explicitly guarded here.
     for attr, default in [
-        ('fov_mod', args.fov_mod),
-        ('sample_step', args.sample_step),
+        ('fov_mod', getattr(args, 'fov_mod', None)),
+        ('sample_step', getattr(args, 'sample_step', None)),
         ('render_model', 'BEAP'),
         ('focal_scaling', 1.0),
         ('distortion_scaling', 1.0),
         ('mirror_shift', 0.0),
+        ('mask_path', getattr(args, 'mask_path', None)),
+        ('sibr_mask_refcam', getattr(args, 'sibr_mask_refcam', None)),
     ]:
         if not hasattr(args, attr) or getattr(args, attr) is None:
             setattr(args, attr, default)
@@ -135,6 +140,7 @@ if __name__ == "__main__":
         pp.extract(args),
         args.iteration,
         args.sample_step,
+        args.fov_mod,
         args.mask_path,
         args.sibr_mask_refcam,
     )
