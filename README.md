@@ -113,12 +113,23 @@ bash ./docker/init_my_docker.sh
 pip install --no-build-isolation ./submodules/geer-rasterizer
 ```
 #### SIBR Viewer Configuration with Docker 
+**⚠️ Important Notice on Visualization:**
+`SIBR_gaussianViewer_app` is currently not supported for Gaussian Exact and Efficient Rendering (GEER).
+Please do not use:
+```sh
+  $sibr_gv -m "./output/scnt/<SCENE_ID>/dslr"
+```
+as it invokes the **vanilla 3D Gaussian Splatting rasterizer** for offline rendering from checkpoints. This leads to invalid results, since GEER-trained (ray-based) scenes are incompatible with splatting-based rendering.
+
+**✅ Recommended Alternatives:**
+- **During training**, Use `SIBR_remoteGaussian_app`, which connects via port and calls our modified GEER rasterizer.
 ```sh
 # Enter Workspace for SIBR Viewer on Terminal 2
 bash ./docker/run_my_docker.sh
 # Inside docker container, run:
 $sibr_rg
 ```
+- **For offline visualization**, We recommend using our [`gsplat-geer` implementation](https://github.com/boschresearch/3dgeer/tree/gsplat-geer), built on top of: https://github.com/nerfstudio-project/gsplat/blob/main/docs/3dgut.md (In addition, the mismatched culling issue in UT is resolved using our PBF-based fix.)
 
 ## 🏃Quick Start
 ### 1. Data Preparation
