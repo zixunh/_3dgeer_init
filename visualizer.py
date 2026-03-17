@@ -61,6 +61,24 @@ def visualize(dataset, opt, pipe, iteration, sample_step, fov_mod, mask_path,
         print("Loaded model at iteration", scene.loaded_iter)
         print("Waiting for SIBR viewer connection…")
 
+        # Map render_model string to the integer code used by the rasterizer
+        # (0=BEAP, 1=KB/EQ, 2=PH) and pre-extract any camera intrinsics that
+        # need to be forwarded to every MiniCam created inside the receive() loop.
+        _render_model_map = {"BEAP": 0, "KB": 1, "EQ": 1, "PH": 2}
+        render_model_int = _render_model_map.get(render_model, 0)
+        cam_extra_params: dict = {}
+        if render_model in ("KB", "EQ", "PH"):
+            train_cams = scene.getTrainCameras()
+            if train_cams:
+                ref_cam = train_cams[0]
+                cam_extra_params["focal_x"] = ref_cam.focal_x
+                cam_extra_params["focal_y"] = ref_cam.focal_y
+                cam_extra_params["principal_x"] = ref_cam.principal_x
+                cam_extra_params["principal_y"] = ref_cam.principal_y
+                if render_model in ("KB", "EQ"):
+                    cam_extra_params["distortion_coeffs"] = ref_cam.distortion_coeffs
+                    cam_extra_params["raymap"] = ref_cam.raymap
+
         while True:
             if network_gui.conn is None:
                 network_gui.try_connect()
@@ -69,7 +87,12 @@ def visualize(dataset, opt, pipe, iteration, sample_step, fov_mod, mask_path,
                     net_image_bytes = None
                     # sample_step is forwarded to network_gui.receive() so it can
                     # construct the MiniCam with the correct ray-sampling step size.
-                    extra_params = {"sample_step": sample_step}
+                    # render_model_int and cam_extra_params propagate KB/PH intrinsics.
+                    extra_params = {
+                        "sample_step": sample_step,
+                        "render_model_int": render_model_int,
+                        **cam_extra_params,
+                    }
                     (custom_cam, do_training,
                      pipe.convert_SHs_python, pipe.compute_cov3D_python,
                      keep_alive, scaling_modifier,
