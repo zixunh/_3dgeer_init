@@ -75,7 +75,9 @@ class SceneInfo_fisheye(NamedTuple):
 
 def getNerfppNorm(cam_info):
     def get_center_and_diag(cam_centers):
-        cam_centers = np.hstack(cam_centers)
+        if not cam_centers:
+            return np.zeros(3), 1.0
+        cam_centers = np.concatenate(cam_centers, axis=1)
         avg_cam_center = np.mean(cam_centers, axis=1, keepdims=True)
         center = avg_cam_center
         dist = np.linalg.norm(cam_centers - center, axis=0, keepdims=True)
