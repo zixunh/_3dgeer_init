@@ -27,7 +27,7 @@ OUTPUT_DIR=$CKPT_DIR/$SCENE_ID
 
 # Must match the values used during training
 STEP=0.002
-FOVMOD_VIS=1
+FOVMOD_VIS=1.3
 
 # Iteration to load (-1 = latest checkpoint)
 ITER=30000
