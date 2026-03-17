@@ -17,7 +17,7 @@ DATA_ROOT="data/scnt/datasets/"
 
 # Must match the values used during training
 STEP=0.002
-FOVMOD_TRAIN=1
+FOVMOD_VIS=1
 
 # Iteration to load (-1 = latest checkpoint)
 ITER=30000
@@ -31,8 +31,8 @@ echo "Visualizing scene: $SCENE_ID"
 DATASET_DIR="${DATA_ROOT}${SCENE_ID}/"
 OUTPUT_DIR="output/scnt/${SCENE_ID}"
 
-BEAP_DIR_TRAIN="beap_fov_${FOVMOD_TRAIN}_step_${STEP}/"
-TRAIN_MASK_FN="fov_${FOVMOD_TRAIN}_step_${STEP}_mask.png"
+BEAP_DIR_VIS="beap_fov_${FOVMOD_VIS}_step_${STEP}/"
+TRAIN_MASK_FN="fov_${FOVMOD_VIS}_step_${STEP}_mask.png"
 
 python visualizer.py \
     -s "$DATASET_DIR" \
@@ -41,6 +41,6 @@ python visualizer.py \
     --ip "$IP" \
     --port "$PORT" \
     --sample_step "$STEP" \
-    --fov_mod "$FOVMOD_TRAIN" \
-    --mask_path "${DATASET_DIR}${BEAP_DIR_TRAIN}${TRAIN_MASK_FN}" \
+    --fov_mod "$FOVMOD_VIS" \
+    --mask_path "${DATASET_DIR}${BEAP_DIR_VIS}${TRAIN_MASK_FN}" \
     --sibr_mask_refcam "${DATASET_DIR}colmap/cameras_fish.txt"
