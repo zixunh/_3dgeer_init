@@ -22,7 +22,9 @@ from utils.general_utils import safe_state
 from utils.image_utils import match_mask_to_image
 
 
-def visualize(dataset, opt, pipe, iteration, sample_step, fov_mod, mask_path, sibr_mask_refcam=None):
+def visualize(dataset, opt, pipe, iteration, sample_step, fov_mod, mask_path,
+              sibr_mask_refcam=None, render_model='BEAP', focal_scaling=1.0,
+              distortion_scaling=1.0, mirror_shift=0.0, raymap_path=None):
     """
     Load a trained checkpoint and serve the SIBR online viewer via network_gui.
     This mirrors the network_gui loop from train.py but runs indefinitely after
@@ -34,10 +36,15 @@ def visualize(dataset, opt, pipe, iteration, sample_step, fov_mod, mask_path, si
         dataset.fov_mod = fov_mod
         dataset.sample_step = sample_step
         dataset.raymap = None
-        dataset.render_model = getattr(dataset, 'render_model', 'BEAP')
-        dataset.focal_scaling = getattr(dataset, 'focal_scaling', 1.0)
-        dataset.distortion_scaling = getattr(dataset, 'distortion_scaling', 1.0)
-        dataset.mirror_shift = getattr(dataset, 'mirror_shift', 0.0)
+        if raymap_path is not None and os.path.exists(raymap_path):
+            try:
+                dataset.raymap = np.load(raymap_path)
+            except (IOError, ValueError) as e:
+                print(f"Warning: could not load raymap from '{raymap_path}': {e}")
+        dataset.render_model = render_model
+        dataset.focal_scaling = focal_scaling
+        dataset.distortion_scaling = distortion_scaling
+        dataset.mirror_shift = mirror_shift
 
         scene = Scene(dataset, gaussians, load_iteration=iteration, shuffle=False)
 
@@ -109,6 +116,14 @@ if __name__ == "__main__":
     parser.add_argument('--fov_mod', type=float, default=None)
     parser.add_argument('--mask_path', type=str, default=None)
     parser.add_argument('--sibr_mask_refcam', type=str, default=None)
+    parser.add_argument('--render_model', type=str, default='BEAP',
+                        choices=['BEAP', 'KB', 'PH'],
+                        help="Render mode: BEAP (default), KB, or PH")
+    parser.add_argument('--focal_scaling', type=float, default=1.0)
+    parser.add_argument('--distortion_scaling', type=float, default=1.0)
+    parser.add_argument('--mirror_shift', type=float, default=0.0)
+    parser.add_argument('--raymap_path', type=str, default=None,
+                        help="Path to pre-generated raymap .npy file (required for KB mode)")
 
     args = get_combined_args(parser)
 
@@ -125,6 +140,7 @@ if __name__ == "__main__":
         ('mirror_shift', 0.0),
         ('mask_path', getattr(args, 'mask_path', None)),
         ('sibr_mask_refcam', getattr(args, 'sibr_mask_refcam', None)),
+        ('raymap_path', getattr(args, 'raymap_path', None)),
     ]:
         if not hasattr(args, attr) or getattr(args, attr) is None:
             setattr(args, attr, default)
@@ -144,4 +160,9 @@ if __name__ == "__main__":
         args.fov_mod,
         args.mask_path,
         args.sibr_mask_refcam,
+        args.render_model,
+        args.focal_scaling,
+        args.distortion_scaling,
+        args.mirror_shift,
+        args.raymap_path,
     )
