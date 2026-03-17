@@ -13,6 +13,17 @@ import torch
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 
+def match_mask_to_image(mask, image):
+    """Return mask resized to match image's spatial dimensions (H, W) if needed.
+
+    Both tensors are expected to have shape [C, H, W].  When the heights and
+    widths already agree the original mask tensor is returned unchanged.
+    """
+    if mask.shape[-2:] != image.shape[-2:]:
+        mask = F.interpolate(mask[None, ...].float(), image.shape[-2:], mode='nearest')[0]
+    return mask
+
+
 def mse(img1, img2):
     return (((img1 - img2)) ** 2).view(img1.shape[0], -1).mean(1, keepdim=True)
 
