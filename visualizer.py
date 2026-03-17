@@ -112,13 +112,17 @@ if __name__ == "__main__":
     args = get_combined_args(parser)
 
     # Forward optional render-time attributes that may not exist in the cfg_args
+    # Use getattr(..., None) to avoid AttributeError when get_combined_args drops
+    # None-valued command-line arguments that are absent from the saved cfg_args.
     for attr, default in [
-        ('fov_mod', args.fov_mod),
-        ('sample_step', args.sample_step),
+        ('fov_mod', getattr(args, 'fov_mod', None)),
+        ('sample_step', getattr(args, 'sample_step', None)),
         ('render_model', 'BEAP'),
         ('focal_scaling', 1.0),
         ('distortion_scaling', 1.0),
         ('mirror_shift', 0.0),
+        ('mask_path', getattr(args, 'mask_path', None)),
+        ('sibr_mask_refcam', getattr(args, 'sibr_mask_refcam', None)),
     ]:
         if not hasattr(args, attr) or getattr(args, attr) is None:
             setattr(args, attr, default)
