@@ -82,13 +82,19 @@ __forceinline__ __device__ float2 invinterpolated_uv(
 	const float4 dist_coeff, 
 	const float tan_x, const float tan_y) {
 	// Compute the inverse interpolation for the UV coordinates
-	float2 uv_indices;
 	float radius = sqrtf(sq(tan_x) + sq(tan_y));
+	// When both tan components are zero the ray points along the optical axis,
+	// which projects exactly onto the principal point.  Guard here to avoid
+	// division by zero (which would produce NaN and later an inverted bounding
+	// box leading to unsigned-integer underflow and an OOM crash).
+	if (radius < 1e-8f)
+		return make_float2(principal_x, principal_y);
 	float angle = atanf(radius);
 	float angle_sq = sq(angle);
 	float angle_sq_sq = sq(angle_sq);
 
 	float r = angle * (1.0 + dist_coeff.x * angle_sq + dist_coeff.y * angle_sq_sq + dist_coeff.z * angle_sq * angle_sq_sq + dist_coeff.w * angle_sq_sq * angle_sq_sq);
+	float2 uv_indices;
 	uv_indices.x = (tan_x * r * focal_x) / radius + principal_x;
 	uv_indices.y = (tan_y * r * focal_y) / radius + principal_y;
 	return uv_indices;
@@ -123,7 +129,9 @@ __forceinline__ __device__ bool checkValid(
 	const int idx,
 	const float4 pbf_tan
 ) {
-	float2 rayf = {(float)raymap[idx * 3] / (float)raymap[idx * 3 + 2], (float)raymap[idx * 3 + 1] / (float)raymap[idx * 3 + 2]};
+	float ray_z = (float)raymap[idx * 3 + 2];
+	if (fabsf(ray_z) < 1e-8f) return false;
+	float2 rayf = {(float)raymap[idx * 3] / ray_z, (float)raymap[idx * 3 + 1] / ray_z};
 	if (rayf.x < pbf_tan.x || rayf.x > pbf_tan.y) return false;
 	if (rayf.y < pbf_tan.z || rayf.y > pbf_tan.w) return false;
 	return true;

@@ -1084,6 +1084,8 @@ renderCUDA(
 
 			// acceleration in RenderCUDA; still has GPU bubble
 			if (mode==1) {
+				if (fabsf(rayf.z) < 1e-8f)
+					continue;
 				if (((rayf.x / rayf.z) < b_xxyy.x) || ((rayf.x / rayf.z) > b_xxyy.y))
 					continue;
 				if (((rayf.y / rayf.z) < b_xxyy.z) || ((rayf.y / rayf.z) > b_xxyy.w))

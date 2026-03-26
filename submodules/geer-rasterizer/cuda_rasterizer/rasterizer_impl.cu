@@ -79,7 +79,11 @@ __global__ void extractRaymapChannel(const float* raymap,
 		ray_idx = y * W + x;
 	}
 	
-	channelmap[idx] = raymap[3 * ray_idx + c] / raymap[3 * ray_idx + 2];
+	float ray_z = raymap[3 * ray_idx + 2];
+	if (fabsf(ray_z) < 1e-8f)
+		channelmap[idx] = 0.0f;
+	else
+		channelmap[idx] = raymap[3 * ray_idx + c] / ray_z;
 }
 
 // Generates one key/value pair for all Gaussian / tile overlaps. 

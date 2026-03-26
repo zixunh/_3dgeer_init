@@ -291,8 +291,10 @@ class MiniCam:
         radius = np.sqrt(tan_theta ** 2 + tan_phi ** 2)
         theta = np.arctan(radius)
         r = theta * (1.0 + kk[0] * theta**2 + kk[1] * theta**4 + kk[2] * theta**6 + kk[3] * theta**8)
-        u = tan_theta * r * fx / radius + cx
-        v = tan_phi * r * fy / radius + cy
+        nonzero = radius > 0
+        radius_safe = np.where(nonzero, radius, 1.0)
+        u = np.where(nonzero, tan_theta * r * fx / radius_safe + cx, cx)
+        v = np.where(nonzero, tan_phi * r * fy / radius_safe + cy, cy)
         u_mask = np.logical_and(u >= 0, u < width)
         v_mask =  np.logical_and(v >= 0, v < height) 
         valid_mask = u_mask & v_mask
