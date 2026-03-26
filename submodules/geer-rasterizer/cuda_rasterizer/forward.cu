@@ -1016,7 +1016,13 @@ renderCUDA(
 	if (mode == 0) {
 		rayf = make_float3((float)tan_theta[min(pix.x, W-1)], (float)tan_phi[min(pix.y, H-1)], 1.f);
 	} else if (mode == 1) {
-		rayf = make_float3((float)raymap[pix_id * 3], (float)raymap[pix_id * 3 + 1],(float)raymap[pix_id * 3 + 2]);
+		// Clamp pixel coordinates to valid bounds before indexing the raymap.
+		// Threads outside the image boundary (pix.x >= W or pix.y >= H) exist
+		// because tile blocks may extend beyond the image edge; the `done` flag
+		// below ensures they never write output, but we must still prevent an
+		// out-of-bounds read here (cf. BEAP mode's min(pix.x, W-1) pattern).
+		uint32_t safe_pix_id = W * min(pix.y, (uint32_t)(H - 1)) + min(pix.x, (uint32_t)(W - 1));
+		rayf = make_float3((float)raymap[safe_pix_id * 3], (float)raymap[safe_pix_id * 3 + 1], (float)raymap[safe_pix_id * 3 + 2]);
 	} else {
 		rayf = { ((float)pix.x + 0.5f) / focal_x - W / (2.0f * focal_x), ((float)pix.y + 0.5f) / focal_y - H / (2.0f * focal_y), 1.0f };
 	}
