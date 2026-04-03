@@ -4,21 +4,21 @@
 ### Render and Eval Examples
 ScanNet++ Dataset
 ```bash
-bash scripts/render_scnt.sh 1d003b07bd/dslr data/scnt/datasets ckpt/scnt KB
-bash scripts/eval_scnt.sh 1d003b07bd/dslr data/scnt/datasets ckpt/scnt KB
-bash scripts/eval_scnt.sh 1d003b07bd/dslr data/scnt/datasets ckpt/scnt BEAP
+bash scripts/render.sh 1d003b07bd/dslr data/scnt/datasets ckpt/scnt KB
+bash scripts/eval.sh 1d003b07bd/dslr data/scnt/datasets ckpt/scnt KB
+bash scripts/eval.sh 1d003b07bd/dslr data/scnt/datasets ckpt/scnt BEAP
 ```
 Aria Dataset
 ```bash
-bash scripts/render_scnt.sh steakhouse data/aria/scannetpp_formatted ckpt/aria KB
-bash scripts/eval_scnt.sh steakhouse data/aria/scannetpp_formatted ckpt/aria KB
-bash scripts/eval_scnt.sh steakhouse data/aria/scannetpp_formatted ckpt/aria BEAP
+bash scripts/render.sh steakhouse data/aria/scannetpp_formatted ckpt/aria KB
+bash scripts/eval.sh steakhouse data/aria/scannetpp_formatted ckpt/aria KB
+bash scripts/eval.sh steakhouse data/aria/scannetpp_formatted ckpt/aria BEAP
 ```
 Tanks and Temples
 ```bash
-bash scripts/render_scnt.sh truck data/tt/datasets ckpt/tt PH
-bash scripts/eval_scnt.sh truck data/tt/datasets ckpt/tt PH
-bash scripts/eval_scnt.sh truck data/tt/datasets ckpt/tt BEAP
+bash scripts/render.sh truck data/tt/datasets ckpt/tt PH
+bash scripts/eval.sh truck data/tt/datasets ckpt/tt PH
+bash scripts/eval.sh truck data/tt/datasets ckpt/tt BEAP
 ```
 ### Asso Mode Ablation
 The `--asso_mode` argument controls the Gaussian association (tile culling) method used during rendering. Three modes are supported:

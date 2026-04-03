@@ -180,15 +180,15 @@ Our framework follows the standard COLMAP data structure. For generic cameras (e
 ### 2. Training 3DGEER
 To train 3DGEER on scannet++ data:
 ```bash
-bash ./scripts/train_scnt.sh
+bash ./scripts/train.sh
 ```
 > full training codes and scripts will be released soon.
 
 ### 3. Rendering & Evaluation
 To render high-quality images and compute PSNR/SSIM/LPIPS:
 ```bash
-bash scripts/render_scnt.sh <SCENE_ID> <DATA_ROOT> <CKPT_DIR> <MODE>
-bash scripts/eval_scnt.sh <SCENE_ID> <DATA_ROOT> <CKPT_DIR> <MODE>
+bash scripts/render.sh <SCENE_ID> <DATA_ROOT> <CKPT_DIR> <MODE>
+bash scripts/eval.sh <SCENE_ID> <DATA_ROOT> <CKPT_DIR> <MODE>
 ```
 
 **Arguments:**
