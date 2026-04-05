@@ -30,7 +30,8 @@ try:
 except ImportError:
     TENSORBOARD_FOUND = False
 
-def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint, debug_from, fov_mod, sample_step, mask_path, sibr_mask_refcam=None):
+def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint, debug_from, fov_mod, sample_step, mask_path, sibr_mask_refcam=None,
+             render_model='BEAP', raymap_path=None, focal_scaling=1.0, distortion_scaling=1.0, mirror_shift=0.0):
     os.makedirs('tmp', exist_ok=True)
     first_iter = 0
     tb_writer = prepare_output_and_logger(dataset)
@@ -38,12 +39,13 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
     dataset.fov_mod = fov_mod
     dataset.sample_step = sample_step
+    dataset.render_model = render_model
+    dataset.focal_scaling = focal_scaling
+    dataset.distortion_scaling = distortion_scaling
+    dataset.mirror_shift = mirror_shift
     dataset.raymap = None
-    # Set safe defaults (e.g. when training, not rendering).
-    dataset.render_model = getattr(dataset, 'render_model', 'BEAP')
-    dataset.focal_scaling = getattr(dataset, 'focal_scaling', 1.0)
-    dataset.distortion_scaling = getattr(dataset, 'distortion_scaling', 1.0)
-    dataset.mirror_shift = getattr(dataset, 'mirror_shift', 0.0)
+    if raymap_path is not None and os.path.exists(raymap_path):
+        dataset.raymap = np.load(raymap_path)
     scene = Scene(dataset, gaussians, shuffle=False)
 
     gaussians.training_setup(opt)
@@ -65,9 +67,11 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     ema_Ll1depth_for_log = 0.0
 
     print("mask_path:", mask_path)
-    valid_mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
-    valid_mask = np.repeat(valid_mask[None, ...], 3, axis=0)
-    valid_mask = torch.tensor(valid_mask)
+    valid_mask = None
+    if mask_path is not None:
+        valid_mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
+        valid_mask = np.repeat(valid_mask[None, ...], 3, axis=0)
+        valid_mask = torch.tensor(valid_mask)
 
     progress_bar = tqdm(range(first_iter, opt.iterations), desc="Training progress")
     first_iter += 1
@@ -118,7 +122,8 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
         render_pkg = render(viewpoint_cam, gaussians, pipe, bg, use_trained_exp=dataset.train_test_exp)
         image, viewspace_point_tensor, visibility_filter, radii = render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
-        image[match_mask_to_image(valid_mask, image) == 0] = 0.0
+        if valid_mask is not None:
+            image[match_mask_to_image(valid_mask, image) == 0] = 0.0
         # Loss
         gt_image = viewpoint_cam.sampled_image.cuda()
         Ll1 = l1_loss(image, gt_image)
@@ -229,7 +234,8 @@ def training_report(tb_writer, iteration, Ll1, loss, l1_loss, elapsed, testing_i
                 psnr_test = 0.0
                 for idx, viewpoint in enumerate(config['cameras']):
                     image = torch.clamp(renderFunc(viewpoint, scene.gaussians, *renderArgs)["render"], 0.0, 1.0)
-                    image[match_mask_to_image(valid_mask, image) == 0] = 0.0
+                    if valid_mask is not None:
+                        image[match_mask_to_image(valid_mask, image) == 0] = 0.0
                     gt_image = torch.clamp(viewpoint.sampled_image.to("cuda"), 0.0, 1.0)
                     if train_test_exp:
                         image = image[..., image.shape[-1] // 2:]
@@ -272,6 +278,16 @@ if __name__ == "__main__":
     parser.add_argument("--sibr_mask_refcam", type=str, default = None)
     parser.add_argument("--sample_step", type=float, default = None)
     parser.add_argument("--fov_mod", type=float, default = None)
+    parser.add_argument("--render_model", type=str, default='BEAP',
+                        help="Rendering/training projection mode: BEAP (default), KB, EQ, or PH")
+    parser.add_argument("--raymap_path", type=str, default=None,
+                        help="Path to a .npy per-pixel ray-direction map (required for KB/EQ training)")
+    parser.add_argument("--focal_scaling", type=float, default=1.0,
+                        help="Scale factor applied to the focal length (KB/PH modes)")
+    parser.add_argument("--distortion_scaling", type=float, default=1.0,
+                        help="Scale factor applied to distortion coefficients (KB mode; 0 = EQ)")
+    parser.add_argument("--mirror_shift", type=float, default=0.0,
+                        help="Mirror-model shift parameter xi for omnidirectional mapping (KB mode)")
     args = parser.parse_args(sys.argv[1:])
     args.save_iterations.append(args.iterations)
     
@@ -285,7 +301,8 @@ if __name__ == "__main__":
         network_gui.init(args.ip, args.port)
     torch.autograd.set_detect_anomaly(args.detect_anomaly)
     training(lp.extract(args), op.extract(args), pp.extract(args), args.test_iterations, args.save_iterations, args.checkpoint_iterations, args.start_checkpoint, args.debug_from, \
-             args.fov_mod,  args.sample_step, args.mask_path, args.sibr_mask_refcam)
+             args.fov_mod,  args.sample_step, args.mask_path, args.sibr_mask_refcam, \
+             args.render_model, args.raymap_path, args.focal_scaling, args.distortion_scaling, args.mirror_shift)
 
     # All done
     print("\nTraining complete.")
