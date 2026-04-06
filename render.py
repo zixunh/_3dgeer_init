@@ -32,11 +32,11 @@ def render_set(model_path, mask_tensor, name, iteration, views, gaussians, pipel
 
     render_path = os.path.join(model_path, name, "ours_{}".format(iteration), "renders")
     gts_path = os.path.join(model_path, name, "ours_{}".format(iteration), "gt")
-    asso_path = os.path.join(model_path, name, "ours_{}".format(iteration), "asso")
+    # asso_path = os.path.join(model_path, name, "ours_{}".format(iteration), "asso")
 
     makedirs(render_path, exist_ok=True)
     makedirs(gts_path, exist_ok=True)
-    makedirs(asso_path, exist_ok=True)
+    # makedirs(asso_path, exist_ok=True)
 
     render_times_overall = []
     render_times_prep = []
@@ -74,12 +74,11 @@ def render_set(model_path, mask_tensor, name, iteration, views, gaussians, pipel
         torchvision.utils.save_image(rendering, os.path.join(render_path, '{0:05d}'.format(idx) + ".png"))
         torchvision.utils.save_image(gt, os.path.join(gts_path, '{0:05d}'.format(idx) + ".png"))
 
-        grid_size = 16
-        grid_w = int((rendering.shape[2] + grid_size - 1) / grid_size)
-        grid_h = int((rendering.shape[1] + grid_size - 1) / grid_size)
+        # grid_size = 16
+        # grid_w = int((rendering.shape[2] + grid_size - 1) / grid_size)
+        # grid_h = int((rendering.shape[1] + grid_size - 1) / grid_size)
 
-        torchvision.utils.save_image((range_len.reshape(grid_h, grid_w)[:, :, None].float() / range_len.max()).permute(2,0,1), \
-                                      os.path.join(asso_path, '{0:05d}'.format(idx) + ".png"))
+        # torchvision.utils.save_image((range_len.reshape(grid_h, grid_w)[:, :, None].float() / range_len.max()).permute(2,0,1), os.path.join(asso_path, '{0:05d}'.format(idx) + ".png"))
 
         image_save_end = time.time()
         image_save_times.append((image_save_end - image_save_start)*1000)

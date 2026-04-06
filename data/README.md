@@ -59,3 +59,49 @@ This script will:
 ## 3. Tanks and Temples
 Download Tanks and Temples data from: https://www.tanksandtemples.org/download/
 
+After downloading, each scene should look like:
+```
+|_./data/tt
+    |_datasets
+        |_truck
+        |   |_images
+        |   |_sparse/0
+        |       |_cameras.bin
+        |       |_images.bin
+        |       |_points3D.bin
+        |_train
+        |_...
+```
+
+### Preprocessing Command
+```bash
+sh data/tt/prep_tt_ph.sh <SCENE_NAME> <ROOT_PATH>
+```
+Example:
+```bash
+sh data/tt/prep_tt_ph.sh truck data/tt
+```
+This script will:
+- Convert the binary COLMAP model (`sparse/0/*.bin`) to text format (`colmap/*.txt`)
+- Copy scene images from `images/` to `resized_images/` with sequential names (`000000.jpg`, `000001.jpg`, …)
+- Update `images.txt` to reflect the new file names
+- Create `cameras_fish.txt` (copy of `cameras.txt`; TT uses perspective cameras)
+
+After preprocessing, the scene directory matches the ScanNet++ format:
+```
+|_./data/tt
+    |_datasets
+        |_truck
+        |   |_colmap
+        |   |   |_cameras.txt
+        |   |   |_cameras_fish.txt
+        |   |   |_images.txt
+        |   |   |_points3D.txt
+        |   |_resized_images
+        |       |_000000.jpg
+        |       |_000001.jpg
+        |       |_...
+        |_train
+        |_...
+```
+

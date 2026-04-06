@@ -1082,7 +1082,6 @@ renderCUDA(
 			// if (rayf not in pbf_tan) continue;
 			float4 b_xxyy = collected_pbf_tan[j];
 
-			// acceleration in RenderCUDA; still has GPU bubble
 			if (mode==1) {
 				if (((rayf.x / rayf.z) < b_xxyy.x) || ((rayf.x / rayf.z) > b_xxyy.y))
 					continue;

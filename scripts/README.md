@@ -1,24 +1,142 @@
 # Train and Eval Documentation for 3DGEER
 ### Train Examples
-> Will be soon released.
+
+**Arguments:**
+
+`SCENE_ID` : scene name (e.g. `1d003b07bd/dslr`, `steakhouse`, `truck`)
+
+`DATA_ROOT` : root directory of the formatted dataset (e.g. `data/scnt/datasets`)
+
+`OUTPUT_DIR` : directory where the trained model will be saved (e.g. `output/scnt/1d003b07bd/dslr`)
+
+`STEP` : ray sampling interval in radians for BEAP/KB training (e.g. `0.002`)
+
+`FOVMOD_TRAIN` : FoV scale factor applied during training (e.g. `1.3`)
+
+---
+
+#### ScanNet++ — BEAP Mode (default, recommended)
+
+Use the convenience script to train on multiple scenes at once:
+
+```bash
+bash scripts/train.sh
+```
+
+The script trains on `1d003b07bd/dslr` and `1f7cbbdde1/dslr` by default. To train on a single scene manually:
+
+```bash
+SCENE_ID=1d003b07bd/dslr
+DATA_ROOT=data/scnt/datasets
+OUTPUT_DIR=output/scnt/${SCENE_ID}
+STEP=0.002
+FOVMOD_TRAIN=1.3
+
+DATASET_DIR=${DATA_ROOT}/${SCENE_ID}
+BEAP_DIR_TRAIN=beap_fov_${FOVMOD_TRAIN}_step_${STEP}
+TRAIN_MASK_FN=fov_${FOVMOD_TRAIN}_step_${STEP}_mask.png
+
+# Step 1 – Convert fisheye images to BEAP equiangular space
+python data/scnt/scnt_kb2beap.py \
+    --path ${DATASET_DIR} --dst ${BEAP_DIR_TRAIN} \
+    --step ${STEP} --fov_mod ${FOVMOD_TRAIN} \
+    --mask_dst ${TRAIN_MASK_FN}
+
+# Step 2 – Train
+python train.py \
+    -s ${DATASET_DIR} -m ${OUTPUT_DIR} \
+    --iterations 30000 \
+    --checkpoint_iterations 3000 7000 15000 30000 \
+    --save_iterations 3000 7000 15000 30000 \
+    --test_iterations 3000 7000 15000 30000 \
+    --resolution 1 --eval \
+    --sample_step ${STEP} --fov_mod ${FOVMOD_TRAIN} \
+    --mask_path ${DATASET_DIR}/${BEAP_DIR_TRAIN}/${TRAIN_MASK_FN} \
+    --sibr_mask_refcam ${DATASET_DIR}/colmap/cameras_fish.txt
+```
+
+---
+
+#### ScanNet++ — KB Mode (Kannala-Brandt fisheye)
+
+```bash
+SCENE_ID=1d003b07bd/dslr
+DATA_ROOT=data/scnt/datasets
+OUTPUT_DIR=output/scnt/${SCENE_ID}
+STEP=0.002
+FOVMOD_TRAIN=1.3
+DIST_SCALING=1.0   # set to 0 for equidistant (EQ) mode
+FOCAL_SCALING=1.0
+MIRR_SHIFT=0.0
+
+DATASET_DIR=${DATA_ROOT}/${SCENE_ID}
+
+# Step 1 – Generate per-pixel ray map
+python data/scnt/scnt_raymap.py \
+    --path ${DATA_ROOT} --scenes ${SCENE_ID} \
+    --distortion_scaling ${DIST_SCALING} \
+    --focal_scaling ${FOCAL_SCALING} \
+    --mirror_shift ${MIRR_SHIFT}
+
+# Step 2 – Train in KB mode
+python train.py \
+    -s ${DATASET_DIR} -m ${OUTPUT_DIR} \
+    --iterations 30000 \
+    --checkpoint_iterations 3000 7000 15000 30000 \
+    --save_iterations 3000 7000 15000 30000 \
+    --test_iterations 3000 7000 15000 30000 \
+    --resolution 1 --eval \
+    --render_model KB \
+    --raymap_path ${DATASET_DIR}/raymap_fisheye.npy \
+    --focal_scaling ${FOCAL_SCALING} \
+    --distortion_scaling ${DIST_SCALING} \
+    --mirror_shift ${MIRR_SHIFT} \
+    --sample_step ${STEP} --fov_mod ${FOVMOD_TRAIN}
+```
+
+---
+
+#### Tank and Temples — PH Mode (pinhole)
+
+```bash
+SCENE_ID=truck
+DATA_ROOT=data/tt/datasets
+OUTPUT_DIR=output/tt/${SCENE_ID}
+STEP=0.002
+FOVMOD_TRAIN=1.3
+FOCAL_SCALING=1.0
+
+DATASET_DIR=${DATA_ROOT}/${SCENE_ID}
+
+python train.py \
+    -s ${DATASET_DIR} -m ${OUTPUT_DIR} \
+    --iterations 30000 \
+    --checkpoint_iterations 3000 7000 15000 30000 \
+    --save_iterations 3000 7000 15000 30000 \
+    --test_iterations 3000 7000 15000 30000 \
+    --resolution 1 --eval \
+    --render_model PH \
+    --focal_scaling ${FOCAL_SCALING} \
+    --sample_step ${STEP} --fov_mod ${FOVMOD_TRAIN}
+```
 ### Render and Eval Examples
 ScanNet++ Dataset
 ```bash
-bash scripts/render_scnt.sh 1d003b07bd/dslr data/scnt/datasets ckpt/scnt KB
-bash scripts/eval_scnt.sh 1d003b07bd/dslr data/scnt/datasets ckpt/scnt KB
-bash scripts/eval_scnt.sh 1d003b07bd/dslr data/scnt/datasets ckpt/scnt BEAP
+bash scripts/render.sh 1d003b07bd/dslr data/scnt/datasets ckpt/scnt KB
+bash scripts/eval.sh 1d003b07bd/dslr data/scnt/datasets ckpt/scnt KB
+bash scripts/eval.sh 1d003b07bd/dslr data/scnt/datasets ckpt/scnt BEAP
 ```
 Aria Dataset
 ```bash
-bash scripts/render_scnt.sh steakhouse data/aria/scannetpp_formatted ckpt/aria KB
-bash scripts/eval_scnt.sh steakhouse data/aria/scannetpp_formatted ckpt/aria KB
-bash scripts/eval_scnt.sh steakhouse data/aria/scannetpp_formatted ckpt/aria BEAP
+bash scripts/render.sh steakhouse data/aria/scannetpp_formatted ckpt/aria KB
+bash scripts/eval.sh steakhouse data/aria/scannetpp_formatted ckpt/aria KB
+bash scripts/eval.sh steakhouse data/aria/scannetpp_formatted ckpt/aria BEAP
 ```
 Tanks and Temples
 ```bash
-bash scripts/render_scnt.sh truck data/tt/datasets ckpt/tt PH
-bash scripts/eval_scnt.sh truck data/tt/datasets ckpt/tt PH
-bash scripts/eval_scnt.sh truck data/tt/datasets ckpt/tt BEAP
+bash scripts/render.sh truck data/tt/datasets ckpt/tt PH
+bash scripts/eval.sh truck data/tt/datasets ckpt/tt PH
+bash scripts/eval.sh truck data/tt/datasets ckpt/tt BEAP
 ```
 ### Asso Mode Ablation
 The `--asso_mode` argument controls the Gaussian association (tile culling) method used during rendering. Three modes are supported:

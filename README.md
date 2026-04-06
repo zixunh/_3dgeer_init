@@ -178,17 +178,34 @@ Our framework follows the standard COLMAP data structure. For generic cameras (e
         |_...
 ```
 ### 2. Training 3DGEER
-To train 3DGEER on scannet++ data:
+To train 3DGEER on ScanNet++ data in **BEAP mode** (default, recommended):
 ```bash
-bash ./scripts/train_scnt.sh
+bash ./scripts/train.sh
 ```
-> full training codes and scripts will be released soon.
+
+**Key training arguments:**
+
+| Argument | Description | Default |
+|---|---|---|
+| `-s` / `--source_path` | Path to the scene dataset directory | — |
+| `-m` / `--model_path` | Output directory for checkpoints and logs | `./output/` |
+| `--render_model` | Training projection mode: `BEAP`, `KB`, `EQ`, or `PH` | `BEAP` |
+| `--sample_step` | Ray sampling interval in radians (BEAP/KB) | — |
+| `--fov_mod` | FoV scale factor applied during training | — |
+| `--mask_path` | Path to validity mask PNG (BEAP mode) | — |
+| `--raymap_path` | Path to per-pixel ray-direction map `.npy` (KB/EQ mode) | — |
+| `--focal_scaling` | Scale factor for focal length (KB/PH modes) | `1.0` |
+| `--distortion_scaling` | Scale factor for distortion coefficients (KB mode; `0` → EQ) | `1.0` |
+| `--mirror_shift` | Mirror-model shift ξ for omnidirectional mapping (KB) | `0.0` |
+| `--iterations` | Total training iterations | `30000` |
+
+See [detailed training documentation and examples](./scripts) for BEAP, KB, and PH mode commands.
 
 ### 3. Rendering & Evaluation
 To render high-quality images and compute PSNR/SSIM/LPIPS:
 ```bash
-bash scripts/render_scnt.sh <SCENE_ID> <DATA_ROOT> <CKPT_DIR> <MODE>
-bash scripts/eval_scnt.sh <SCENE_ID> <DATA_ROOT> <CKPT_DIR> <MODE>
+bash scripts/render.sh <SCENE_ID> <DATA_ROOT> <CKPT_DIR> <MODE>
+bash scripts/eval.sh <SCENE_ID> <DATA_ROOT> <CKPT_DIR> <MODE>
 ```
 
 **Arguments:**

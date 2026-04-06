@@ -281,11 +281,16 @@ def readColmapCameras_fisheye(cam_extrinsics, cam_intrinsics, images_folder, fov
 
         if intr.model=="SIMPLE_PINHOLE":
             focal_length_x = intr.params[0]
+            focal_length_y = intr.params[0]
+            principal_x = intr.params[1]
+            principal_y = intr.params[2]
             FovY = focal2fov(focal_length_x, height)
             FovX = focal2fov(focal_length_x, width)
         elif intr.model=="PINHOLE":
             focal_length_x = intr.params[0]
             focal_length_y = intr.params[1]
+            principal_x = intr.params[2]
+            principal_y = intr.params[3]
             FovY = focal2fov(focal_length_y, height)
             FovX = focal2fov(focal_length_x, width)
         elif intr.model=="OPENCV_FISHEYE": #SCANNET++
