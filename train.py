@@ -66,6 +66,22 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     ema_loss_for_log = 0.0
     ema_Ll1depth_for_log = 0.0
 
+    # Pre-compute viewer extra params so MiniCam uses the correct render mode.
+    _render_model_map = {"BEAP": 0, "KB": 1, "EQ": 1, "PH": 2}
+    render_model_int = _render_model_map.get(render_model, 0)
+    cam_extra_params: dict = {}
+    if render_model in ("KB", "EQ", "PH"):
+        train_cams = scene.getTrainCameras()
+        if train_cams:
+            ref_cam = train_cams[0]
+            cam_extra_params["focal_x"] = ref_cam.focal_x
+            cam_extra_params["focal_y"] = ref_cam.focal_y
+            cam_extra_params["principal_x"] = ref_cam.principal_x
+            cam_extra_params["principal_y"] = ref_cam.principal_y
+            if render_model in ("KB", "EQ"):
+                cam_extra_params["distortion_coeffs"] = ref_cam.distortion_coeffs
+                cam_extra_params["raymap"] = ref_cam.raymap
+
     print("mask_path:", mask_path)
     valid_mask = None
     if mask_path is not None:
@@ -81,7 +97,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         while network_gui.conn != None:
             try:
                 net_image_bytes = None
-                extra_params = {"sample_step": sample_step}
+                extra_params = {"sample_step": sample_step, "render_model_int": render_model_int, **cam_extra_params}
                 custom_cam, do_training, pipe.convert_SHs_python, pipe.compute_cov3D_python, keep_alive, scaling_modifer, width, height = network_gui.receive(extra_params)
                 if custom_cam != None:
                     net_image = render(custom_cam, gaussians, pipe, background, scaling_modifer)["render"]
