@@ -102,6 +102,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 if custom_cam != None:
                     net_image = render(custom_cam, gaussians, pipe, background, scaling_modifer)["render"]
                     if sibr_mask_refcam is not None:
+                        print("Applying SIBR mask to network image {}".format(sibr_mask_refcam))
                         net_mask = custom_cam.get_viewpoint_mask(sibr_mask_refcam)
                         net_mask = torch.tensor(np.repeat(net_mask[None, ...], 3, axis=0))
                         net_image[net_mask == 0] = 0.0
