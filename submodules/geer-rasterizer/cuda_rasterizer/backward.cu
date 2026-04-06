@@ -290,6 +290,10 @@ renderCUDA(
 	int W, int H,
 	const float* tan_theta,
 	const float* tan_phi,
+	const float* __restrict__ raymap,
+	const float focal_x,
+	const float focal_y,
+	const int mode,
 	const float* __restrict__ bg_color,
 	const float3* __restrict__ points_xyz_view,
 	const float2* __restrict__ h_opacity,
@@ -314,7 +318,26 @@ renderCUDA(
 	const uint2 pix_min = { block.group_index().x * BLOCK_X, block.group_index().y * BLOCK_Y };
 	const uint2 pix = { pix_min.x + block.thread_index().x, pix_min.y + block.thread_index().y };
 	const uint32_t pix_id = W * pix.y + pix.x;
-	float3 rayf = {(float)tan_theta[min(pix.x, W-1)], (float)tan_phi[min(pix.y, H-1)], 1.f};
+
+	// Compute per-pixel ray direction matching the forward pass mode logic.
+	float3 rayf;
+	if (mode == 0) {
+		// BEAP mode: look up ray direction in the sorted reference arrays.
+		// In BEAP mode W == len(tan_theta) and H == len(tan_phi), so the
+		// clamped indices are always in bounds.
+		rayf = {(float)tan_theta[min(pix.x, W-1)], (float)tan_phi[min(pix.y, H-1)], 1.f};
+	} else if (mode == 1) {
+		// KB / EQ mode: per-pixel ray directions stored in the raymap [H, W, 3].
+		// Guard against out-of-bounds threads at tile edges.
+		const uint32_t safe_id = min(pix_id, (uint32_t)(W * H - 1));
+		rayf = make_float3(raymap[safe_id * 3], raymap[safe_id * 3 + 1], raymap[safe_id * 3 + 2]);
+	} else {
+		// PH mode (and any future pinhole-like mode): compute ray direction
+		// analytically from focal lengths, matching the forward kernel formula.
+		rayf = { ((float)pix.x + 0.5f) / focal_x - W / (2.0f * focal_x),
+		         ((float)pix.y + 0.5f) / focal_y - H / (2.0f * focal_y),
+		         1.0f };
+	}
 
 	const bool inside = pix.x < W&& pix.y < H;
 
@@ -571,7 +594,10 @@ void BACKWARD::render(
 	const uint32_t* point_list,
 	int W, int H,
 	const float* tan_theta,  
-	const float* tan_phi,  
+	const float* tan_phi,
+	const float* raymap,
+	const float focal_x, const float focal_y,
+	const int mode,
 	const float* bg_color,
 	const float3* means3D_view,
 	const float2* h_opacity,
@@ -593,7 +619,10 @@ void BACKWARD::render(
 		ranges,
 		point_list,
 		W, H,
-		tan_theta, tan_phi,  
+		tan_theta, tan_phi,
+		raymap,
+		focal_x, focal_y,
+		mode,
 		bg_color,
 		means3D_view,  
 		h_opacity,
