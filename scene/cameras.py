@@ -212,13 +212,7 @@ class Camera(nn.Module):
             self.raymap = torch.from_numpy(raymap.astype(np.float32)) #self.scannetpp_raymap(raymap, resolution, focal_x, focal_y, FoVx, FoVy, step)
             self.image_width = self.raymap.shape[1]
             self.image_height = self.raymap.shape[0]
-            # Override FoVx/FoVy using the actual ray extents of the raymap so
-            # that tanfovx/tanfovy in the CUDA kernel (used by computePBF /
-            # computeAABB_* for frustum clipping) match the true image boundary.
-            # The fov_mod-based value is unreliable: train_kb.sh uses 1.3 while
-            # render.sh uses 2.0, causing the training kernel to over-cull edge
-            # Gaussians.  Guards against rz≤0 and near-infinite tangents are
-            # handled inside _tanfov_from_raymap.
+            # Override FoVx/FoVy using the actual ray extents of the raymap
             _tanfovx, _tanfovy = _tanfov_from_raymap(raymap)
             if _tanfovx is not None:
                 self.FoVx = 2.0 * math.atan(_tanfovx)
@@ -241,15 +235,7 @@ class Camera(nn.Module):
             self.raymap = None
             self.image_width = resolution[0]
             self.image_height = resolution[1]
-            # Recompute FoVx/FoVy from the actual (post-scaling) focal lengths so that
-            # tanfovx/tanfovy passed to the CUDA rasterizer are consistent with the
-            # focal_x/focal_y used for ray-direction computation in the CUDA kernel.
-            # Without this override, FoVx may be inherited from a fisheye dataset
-            # reader that uses focal2fov2 (= pixels/focal, not a real angle), causing
-            # tanfovx = tan(FoVx/2) to be wrong.  The backward CUDA pass then
-            # recomputes focal_x_bwd = width / (2 * tanfovx) which differs from the
-            # forward focal_x, producing inconsistent ray directions and corrupt
-            # gradients that lead to blurry / meshy training results.
+            # Recompute FoVx/FoVy from the actual (post-scaling) focal lengths
             self.FoVx = 2.0 * math.atan(self.image_width / (2.0 * self.focal_x))
             self.FoVy = 2.0 * math.atan(self.image_height / (2.0 * self.focal_y))
             # Update the projection matrix to match the corrected FOV.
