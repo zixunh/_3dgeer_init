@@ -241,6 +241,24 @@ class Camera(nn.Module):
             self.raymap = None
             self.image_width = resolution[0]
             self.image_height = resolution[1]
+            # Recompute FoVx/FoVy from the actual (post-scaling) focal lengths so that
+            # tanfovx/tanfovy passed to the CUDA rasterizer are consistent with the
+            # focal_x/focal_y used for ray-direction computation in the CUDA kernel.
+            # Without this override, FoVx may be inherited from a fisheye dataset
+            # reader that uses focal2fov2 (= pixels/focal, not a real angle), causing
+            # tanfovx = tan(FoVx/2) to be wrong.  The backward CUDA pass then
+            # recomputes focal_x_bwd = width / (2 * tanfovx) which differs from the
+            # forward focal_x, producing inconsistent ray directions and corrupt
+            # gradients that lead to blurry / meshy training results.
+            self.FoVx = 2.0 * math.atan(self.image_width / (2.0 * self.focal_x))
+            self.FoVy = 2.0 * math.atan(self.image_height / (2.0 * self.focal_y))
+            # Update the projection matrix to match the corrected FOV.
+            self.projection_matrix = getProjectionMatrix(
+                znear=self.znear, zfar=self.zfar, fovX=self.FoVx, fovY=self.FoVy
+            ).transpose(0, 1).cuda()
+            self.full_proj_transform = (
+                self.world_view_transform.unsqueeze(0).bmm(self.projection_matrix.unsqueeze(0))
+            ).squeeze(0)
 
     @staticmethod
     def fov_sample2ray(fovx, fovy, interval):
@@ -326,6 +344,12 @@ class MiniCam:
             self.raymap = None
             self.image_width = width
             self.image_height = height
+            # Mirror the FoVx/FoVy correction from Camera PH mode: if focal
+            # lengths are provided, recompute the FOV from them so that tanfovx/
+            # tanfovy in the CUDA rasterizer are consistent with focal_x/focal_y.
+            if focal_x is not None and focal_y is not None and focal_x > 0 and focal_y > 0:
+                self.FoVx = 2.0 * math.atan(self.image_width / (2.0 * self.focal_x))
+                self.FoVy = 2.0 * math.atan(self.image_height / (2.0 * self.focal_y))
 
     @staticmethod
     def fov_sample2ray(fovx, fovy, interval):
