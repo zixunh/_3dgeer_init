@@ -40,8 +40,8 @@ fi
 # Step 1: Convert binary COLMAP model to text format
 mkdir -p "$DATA_ROOT/colmap"
 colmap model_converter \
-    --input_path "$DATA_ROOT/sparse/0" \
-    --output_path "$DATA_ROOT/colmap" \
+    --input_path "$DATA_ROOT/sparse/0/" \
+    --output_path "$DATA_ROOT/colmap/" \
     --output_type TXT
 
 echo "Converted binary COLMAP model to text format in $DATA_ROOT/colmap"
