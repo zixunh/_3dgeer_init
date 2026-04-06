@@ -72,6 +72,8 @@ namespace CudaRasterizer
 			const int width, int height,
 			const float* tan_theta,
 			const float* tan_phi,
+			const float* raymap,
+			const int mode,
 			const float* means3D,
 			const float* shs,
 			const float* colors_precomp,
