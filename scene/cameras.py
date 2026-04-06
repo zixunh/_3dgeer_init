@@ -15,6 +15,51 @@ import numpy as np
 from utils.graphics_utils import getWorld2View2, getProjectionMatrix, fov2focal
 from utils.general_utils import PILtoTorch
 import cv2
+import math
+
+
+def _tanfov_from_raymap(raymap, min_rz: float = 1e-3, max_tan: float = 1e4):
+    """Derive (tanfovx, tanfovy) from the actual ray-direction extents of a raymap.
+
+    Used in KB/EQ mode to replace the ``fov_mod``-based heuristic, which
+    systematically under-estimates the FOV and causes the PBF frustum-clipping
+    in the CUDA kernel (``computePBF``/``computeAABB_*``) to cull valid
+    edge-of-image Gaussians during training.
+
+    Parameters
+    ----------
+    raymap : numpy.ndarray or torch.Tensor, shape (H, W, 3)
+        Per-pixel camera-space ray directions (rx, ry, rz).  Rays are assumed
+        to point forward (rz > 0 for in-image pixels).
+    min_rz : float
+        Pixels whose rz is at or below this threshold are ignored to avoid
+        division by zero / near-infinite tangent values (e.g. rays at ≥90°).
+    max_tan : float
+        Hard upper cap on the returned tangent values (prevents infinities
+        from slipping through; ``atan(1e4) ≈ 89.99°``).
+
+    Returns
+    -------
+    (tanfovx, tanfovy) : (float, float) or (None, None)
+        Maximum absolute tangent values in x and y.  Returns ``(None, None)``
+        when no valid pixels are found so the caller can keep its default.
+    """
+    if isinstance(raymap, torch.Tensor):
+        arr = raymap.detach().cpu().numpy() if raymap.is_cuda else raymap.numpy()
+    else:
+        arr = np.asarray(raymap, dtype=np.float32)
+
+    rz = arr[:, :, 2]
+    valid = rz > min_rz
+    if not valid.any():
+        return None, None
+
+    safe_rz = np.where(valid, rz, 1.0)
+    tanx = np.abs(arr[:, :, 0]) / safe_rz
+    tany = np.abs(arr[:, :, 1]) / safe_rz
+    tanfovx = float(np.clip(tanx[valid].max(), 0.0, max_tan))
+    tanfovy = float(np.clip(tany[valid].max(), 0.0, max_tan))
+    return tanfovx, tanfovy
 
 def read_intrinsics_text(path):
     """
@@ -167,6 +212,17 @@ class Camera(nn.Module):
             self.raymap = torch.from_numpy(raymap.astype(np.float32)) #self.scannetpp_raymap(raymap, resolution, focal_x, focal_y, FoVx, FoVy, step)
             self.image_width = self.raymap.shape[1]
             self.image_height = self.raymap.shape[0]
+            # Override FoVx/FoVy using the actual ray extents of the raymap so
+            # that tanfovx/tanfovy in the CUDA kernel (used by computePBF /
+            # computeAABB_* for frustum clipping) match the true image boundary.
+            # The fov_mod-based value is unreliable: train_kb.sh uses 1.3 while
+            # render.sh uses 2.0, causing the training kernel to over-cull edge
+            # Gaussians.  Guards against rz≤0 and near-infinite tangents are
+            # handled inside _tanfov_from_raymap.
+            _tanfovx, _tanfovy = _tanfov_from_raymap(raymap)
+            if _tanfovx is not None:
+                self.FoVx = 2.0 * math.atan(_tanfovx)
+                self.FoVy = 2.0 * math.atan(_tanfovy)
         elif render_model == "PH":
             # Pinhole camera: standard perspective projection using focal lengths and
             # principal point.  No distortion correction or per-pixel raymap required;
@@ -256,6 +312,11 @@ class MiniCam:
             self.raymap = raymap
             self.image_width = raymap.shape[1]
             self.image_height = raymap.shape[0]
+            # Mirror the same fov_mod-independent FOV derivation used in Camera.
+            _tanfovx, _tanfovy = _tanfov_from_raymap(raymap)
+            if _tanfovx is not None:
+                self.FoVx = 2.0 * math.atan(_tanfovx)
+                self.FoVy = 2.0 * math.atan(_tanfovy)
         elif render_model == 2:  # PH
             self.focal_x = focal_x
             self.focal_y = focal_y
