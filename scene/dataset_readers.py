@@ -31,8 +31,6 @@ class CameraInfo(NamedTuple):
     FovX: np.array
     focal_x: np.array
     focal_y: np.array
-    principal_x: np.array = None
-    principal_y: np.array = None
     depth_params: dict
     image_path: str
     image_name: str
@@ -40,6 +38,8 @@ class CameraInfo(NamedTuple):
     width: int
     height: int
     is_test: bool
+    principal_x: np.array = None
+    principal_y: np.array = None
 class CameraInfo_fisheye(NamedTuple):
     uid: int
     R: np.array
