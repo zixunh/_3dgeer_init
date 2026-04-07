@@ -12,5 +12,7 @@ python train.py \
     --test_iterations 3000 7000 15000 30000 \
     --resolution 1 --eval \
     --render_model PH \
+    --dataset COLMAP \
+    --camera_model PINHOLE \
     --densification_interval 100 \
     --densify_grad_threshold 0.002
