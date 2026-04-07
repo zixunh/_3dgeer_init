@@ -226,10 +226,18 @@ class Camera(nn.Module):
                     "PH render mode requires focal_x, focal_y, principal_x, and "
                     "principal_y to be set (got None for one or more of these values)"
                 )
-            self.focal_x = focal_x.item() * focal_scaling
-            self.focal_y = focal_y.item() * focal_scaling
-            self.principal_x = principal_x.item()
-            self.principal_y = principal_y.item()
+            # Scale intrinsics to match the render resolution.  The COLMAP focal
+            # lengths and principal point are in original-image pixel coordinates.
+            # When the image is downscaled (resolution != image.size), the CUDA
+            # kernel works in scaled pixel coordinates [0, W) x [0, H), so all
+            # intrinsic quantities must be scaled by the same factor.
+            orig_w, orig_h = image.size
+            scale_x = resolution[0] / orig_w
+            scale_y = resolution[1] / orig_h
+            self.focal_x = focal_x.item() * focal_scaling * scale_x
+            self.focal_y = focal_y.item() * focal_scaling * scale_y
+            self.principal_x = principal_x.item() * scale_x
+            self.principal_y = principal_y.item() * scale_y
             self.distortion_coeffs = None
             self.mirror_shift = None
             self.raymap = None
