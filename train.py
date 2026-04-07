@@ -293,7 +293,7 @@ if __name__ == "__main__":
     parser.add_argument("--start_checkpoint", type=str, default = None)
     parser.add_argument("--mask_path", type=str, default = None)
     parser.add_argument("--sibr_mask_refcam", type=str, default = None)
-    parser.add_argument("--sample_step", type=float, default = None)
+    parser.add_argument("--sample_step", type=float, default=0.002)
     parser.add_argument("--fov_mod", type=float, default = None)
     parser.add_argument("--render_model", type=str, default='BEAP',
                         help="Rendering/training projection mode: BEAP (default), KB, EQ, or PH")
