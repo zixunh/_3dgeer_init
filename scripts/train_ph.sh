@@ -14,5 +14,4 @@ python train.py \
     --render_model PH \
     --dataset COLMAP \
     --camera_model PINHOLE \
-    --densification_interval 100 \
     --densify_grad_threshold 0.002
