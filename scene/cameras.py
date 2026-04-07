@@ -197,6 +197,13 @@ class Camera(nn.Module):
             self.raymap = None
             self.image_width = self.tan_theta.shape[0]
             self.image_height = self.tan_phi.shape[0]
+            if self.image_width != resolution[0] or self.image_height != resolution[1]:
+                raise ValueError(
+                    f"BEAP mode: CUDA kernel resolution ({self.image_width}×{self.image_height}) "
+                    f"does not match loaded image resolution ({resolution[0]}×{resolution[1]}). "
+                    f"Regenerate BEAP images for FoVx={FoVx:.4f}, FoVy={FoVy:.4f}, step={step:.6f}, "
+                    f"or adjust --sample_step / --fov_mod so the ray-grid matches the image size."
+                )
         elif render_model == "KB" or render_model == "EQ":
             # KB mode: Kannala-Brandt fisheye camera.  Uses a per-pixel raymap and
             # polynomial distortion coefficients for the PBF→pixel projection.
@@ -212,6 +219,12 @@ class Camera(nn.Module):
             self.raymap = torch.from_numpy(raymap.astype(np.float32)) #self.scannetpp_raymap(raymap, resolution, focal_x, focal_y, FoVx, FoVy, step)
             self.image_width = self.raymap.shape[1]
             self.image_height = self.raymap.shape[0]
+            if self.image_width != resolution[0] or self.image_height != resolution[1]:
+                raise ValueError(
+                    f"{render_model} mode: raymap resolution ({self.image_width}×{self.image_height}) "
+                    f"does not match loaded image resolution ({resolution[0]}×{resolution[1]}). "
+                    f"Provide a raymap whose (H, W) matches the image size, or resize the images to match the raymap."
+                )
             # Override FoVx/FoVy using the actual ray extents of the raymap
             _tanfovx, _tanfovy = _tanfov_from_raymap(raymap)
             if _tanfovx is not None:
