@@ -31,8 +31,8 @@ class CameraInfo(NamedTuple):
     FovX: np.array
     focal_x: np.array
     focal_y: np.array
-    principal_x: np.array
-    principal_y: np.array
+    principal_x: np.array = None
+    principal_y: np.array = None
     depth_params: dict
     image_path: str
     image_name: str
@@ -149,7 +149,9 @@ def readColmapCameras(cam_extrinsics, cam_intrinsics, depths_params, images_fold
 
         cam_info = CameraInfo(uid=uid, R=R, T=T, FovY=FovY, FovX=FovX, depth_params=depth_params,
                               image_path=image_path, image_name=image_name, depth_path=depth_path,
-                              width=width, height=height, is_test=image_name in test_cam_names_list)
+                              width=width, height=height, is_test=image_name in test_cam_names_list,
+                              focal_x=np.array(focal_length_x), focal_y=np.array(focal_length_y),
+                              principal_x=np.array(principal_x), principal_y=np.array(principal_y))
         cam_infos.append(cam_info)
 
     sys.stdout.write('\n')
