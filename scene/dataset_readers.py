@@ -29,6 +29,10 @@ class CameraInfo(NamedTuple):
     T: np.array
     FovY: np.array
     FovX: np.array
+    focal_x: np.array
+    focal_y: np.array
+    principal_x: np.array
+    principal_y: np.array
     depth_params: dict
     image_path: str
     image_name: str
@@ -36,7 +40,6 @@ class CameraInfo(NamedTuple):
     width: int
     height: int
     is_test: bool
-
 class CameraInfo_fisheye(NamedTuple):
     uid: int
     R: np.array
@@ -117,11 +120,16 @@ def readColmapCameras(cam_extrinsics, cam_intrinsics, depths_params, images_fold
 
         if intr.model=="SIMPLE_PINHOLE":
             focal_length_x = intr.params[0]
+            focal_length_y = intr.params[0]
+            principal_x = intr.params[1]
+            principal_y = intr.params[2]
             FovY = focal2fov(focal_length_x, height)
             FovX = focal2fov(focal_length_x, width)
         elif intr.model=="PINHOLE":
             focal_length_x = intr.params[0]
             focal_length_y = intr.params[1]
+            principal_x = intr.params[2]
+            principal_y = intr.params[3]
             FovY = focal2fov(focal_length_y, height)
             FovX = focal2fov(focal_length_x, width)
         else:
@@ -141,7 +149,9 @@ def readColmapCameras(cam_extrinsics, cam_intrinsics, depths_params, images_fold
 
         cam_info = CameraInfo(uid=uid, R=R, T=T, FovY=FovY, FovX=FovX, depth_params=depth_params,
                               image_path=image_path, image_name=image_name, depth_path=depth_path,
-                              width=width, height=height, is_test=image_name in test_cam_names_list)
+                              width=width, height=height, is_test=image_name in test_cam_names_list,
+                              focal_x=np.array(focal_length_x), focal_y=np.array(focal_length_y),
+                              principal_x=np.array(principal_x), principal_y=np.array(principal_y))
         cam_infos.append(cam_info)
 
     sys.stdout.write('\n')
@@ -421,10 +431,15 @@ def readCamerasFromTransforms(path, transformsfile, depths_folder, white_backgro
             FovX = fovx
 
             depth_path = os.path.join(depths_folder, f"{image_name}.png") if depths_folder != "" else ""
-
+            focal_length_x = fov2focal(FovX, image.size[0])
+            focal_length_y = fov2focal(FovY, image.size[1])
+            cx = image.size[0] / 2.0
+            cy = image.size[1] / 2.0
             cam_infos.append(CameraInfo(uid=idx, R=R, T=T, FovY=FovY, FovX=FovX,
                             image_path=image_path, image_name=image_name,
-                            width=image.size[0], height=image.size[1], depth_path=depth_path, depth_params=None, is_test=is_test))
+                            width=image.size[0], height=image.size[1], depth_path=depth_path, depth_params=None, is_test=is_test,
+                            focal_x=np.array(focal_length_x), focal_y=np.array(focal_length_y),
+                            principal_x=np.array(cx), principal_y=np.array(cy)))
             
     return cam_infos
 

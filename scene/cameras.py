@@ -102,7 +102,8 @@ class Camera(nn.Module):
                  trans=np.array([0.0, 0.0, 0.0]), scale=1.0, data_device = "cuda",
                  train_test_exp = False, is_test_dataset = False, is_test_view = False,
                  render_model = "BEAP", focal_scaling = 1.0, distortion_scaling = 1.0, mirror_shift = 0.0,
-                 raymap = None
+                 raymap = None,
+                 intr_width = None, intr_height = None
                  ):
         super(Camera, self).__init__()
 
@@ -212,13 +213,7 @@ class Camera(nn.Module):
             self.raymap = torch.from_numpy(raymap.astype(np.float32)) #self.scannetpp_raymap(raymap, resolution, focal_x, focal_y, FoVx, FoVy, step)
             self.image_width = self.raymap.shape[1]
             self.image_height = self.raymap.shape[0]
-            # Override FoVx/FoVy using the actual ray extents of the raymap so
-            # that tanfovx/tanfovy in the CUDA kernel (used by computePBF /
-            # computeAABB_* for frustum clipping) match the true image boundary.
-            # The fov_mod-based value is unreliable: train_kb.sh uses 1.3 while
-            # render.sh uses 2.0, causing the training kernel to over-cull edge
-            # Gaussians.  Guards against rz≤0 and near-infinite tangents are
-            # handled inside _tanfov_from_raymap.
+            # Override FoVx/FoVy using the actual ray extents of the raymap
             _tanfovx, _tanfovy = _tanfov_from_raymap(raymap)
             if _tanfovx is not None:
                 self.FoVx = 2.0 * math.atan(_tanfovx)
@@ -232,15 +227,29 @@ class Camera(nn.Module):
                     "PH render mode requires focal_x, focal_y, principal_x, and "
                     "principal_y to be set (got None for one or more of these values)"
                 )
-            self.focal_x = focal_x.item() * focal_scaling
-            self.focal_y = focal_y.item() * focal_scaling
-            self.principal_x = principal_x.item()
-            self.principal_y = principal_y.item()
+            ref_w = intr_width if intr_width is not None else image.size[0]
+            ref_h = intr_height if intr_height is not None else image.size[1]
+            scale_x = resolution[0] / ref_w
+            scale_y = resolution[1] / ref_h
+            self.focal_x = focal_x.item() * focal_scaling * scale_x
+            self.focal_y = focal_y.item() * focal_scaling * scale_y
+            self.principal_x = principal_x.item() * scale_x
+            self.principal_y = principal_y.item() * scale_y
             self.distortion_coeffs = None
             self.mirror_shift = None
             self.raymap = None
             self.image_width = resolution[0]
             self.image_height = resolution[1]
+            # Recompute FoVx/FoVy from the actual (post-scaling) focal lengths
+            self.FoVx = 2.0 * math.atan(self.image_width / (2.0 * self.focal_x))
+            self.FoVy = 2.0 * math.atan(self.image_height / (2.0 * self.focal_y))
+            # Update the projection matrix to match the corrected FOV.
+            self.projection_matrix = getProjectionMatrix(
+                znear=self.znear, zfar=self.zfar, fovX=self.FoVx, fovY=self.FoVy
+            ).transpose(0, 1).cuda()
+            self.full_proj_transform = (
+                self.world_view_transform.unsqueeze(0).bmm(self.projection_matrix.unsqueeze(0))
+            ).squeeze(0)
 
     @staticmethod
     def fov_sample2ray(fovx, fovy, interval):
@@ -326,6 +335,12 @@ class MiniCam:
             self.raymap = None
             self.image_width = width
             self.image_height = height
+            # Mirror the FoVx/FoVy correction from Camera PH mode: if focal
+            # lengths are provided, recompute the FOV from them so that tanfovx/
+            # tanfovy in the CUDA rasterizer are consistent with focal_x/focal_y.
+            if focal_x is not None and focal_y is not None and focal_x > 0 and focal_y > 0:
+                self.FoVx = 2.0 * math.atan(self.image_width / (2.0 * self.focal_x))
+                self.FoVy = 2.0 * math.atan(self.image_height / (2.0 * self.focal_y))
 
     @staticmethod
     def fov_sample2ray(fovx, fovy, interval):
