@@ -227,12 +227,6 @@ class Camera(nn.Module):
                     "PH render mode requires focal_x, focal_y, principal_x, and "
                     "principal_y to be set (got None for one or more of these values)"
                 )
-            # Scale intrinsics to match the render resolution.  The COLMAP focal
-            # lengths and principal point are in the coordinate system of the
-            # cameras.txt image dimensions (intr_width x intr_height).  When
-            # the on-disk images are already downscaled (e.g. half-resolution),
-            # image.size != cameras.txt dimensions.  We must therefore scale
-            # relative to the cameras.txt canonical dimensions, not image.size.
             ref_w = intr_width if intr_width is not None else image.size[0]
             ref_h = intr_height if intr_height is not None else image.size[1]
             scale_x = resolution[0] / ref_w
