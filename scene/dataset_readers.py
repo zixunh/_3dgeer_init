@@ -31,8 +31,8 @@ class CameraInfo(NamedTuple):
     FovX: np.array
     focal_x: np.array
     focal_y: np.array
-    principal_x: np.array = None
-    principal_y: np.array = None
+    principal_x: np.array
+    principal_y: np.array
     depth_params: dict
     image_path: str
     image_name: str
