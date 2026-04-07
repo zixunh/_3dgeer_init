@@ -102,7 +102,8 @@ class Camera(nn.Module):
                  trans=np.array([0.0, 0.0, 0.0]), scale=1.0, data_device = "cuda",
                  train_test_exp = False, is_test_dataset = False, is_test_view = False,
                  render_model = "BEAP", focal_scaling = 1.0, distortion_scaling = 1.0, mirror_shift = 0.0,
-                 raymap = None
+                 raymap = None,
+                 intr_width = None, intr_height = None
                  ):
         super(Camera, self).__init__()
 
@@ -227,13 +228,15 @@ class Camera(nn.Module):
                     "principal_y to be set (got None for one or more of these values)"
                 )
             # Scale intrinsics to match the render resolution.  The COLMAP focal
-            # lengths and principal point are in original-image pixel coordinates.
-            # When the image is downscaled (resolution != image.size), the CUDA
-            # kernel works in scaled pixel coordinates [0, W) x [0, H), so all
-            # intrinsic quantities must be scaled by the same factor.
-            orig_w, orig_h = image.size
-            scale_x = resolution[0] / orig_w
-            scale_y = resolution[1] / orig_h
+            # lengths and principal point are in the coordinate system of the
+            # cameras.txt image dimensions (intr_width x intr_height).  When
+            # the on-disk images are already downscaled (e.g. half-resolution),
+            # image.size != cameras.txt dimensions.  We must therefore scale
+            # relative to the cameras.txt canonical dimensions, not image.size.
+            ref_w = intr_width if intr_width is not None else image.size[0]
+            ref_h = intr_height if intr_height is not None else image.size[1]
+            scale_x = resolution[0] / ref_w
+            scale_y = resolution[1] / ref_h
             self.focal_x = focal_x.item() * focal_scaling * scale_x
             self.focal_y = focal_y.item() * focal_scaling * scale_y
             self.principal_x = principal_x.item() * scale_x
