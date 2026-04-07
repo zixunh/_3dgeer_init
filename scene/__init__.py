@@ -65,8 +65,15 @@ class Scene:
         self.train_cameras = {}
         self.test_cameras = {}
         dataset = dataset_selector(args)
-        # for ray-splatting
-        scene_info = sceneLoadTypeCallbacks[dataset](args)
+
+        # scene_info = sceneLoadTypeCallbacks[dataset](args)
+        if dataset == "Colmap":
+            scene_info = sceneLoadTypeCallbacks[dataset](args.source_path, args.images, args.depths, args.eval, args.train_test_exp)
+        elif dataset == "Blender":
+            scene_info = sceneLoadTypeCallbacks[dataset](args.source_path, args.white_background, args.depths, args.eval)
+        else:
+            print(dataset)
+            scene_info = sceneLoadTypeCallbacks[dataset](args)
 
         if not self.loaded_iter:
             with open(scene_info.ply_path, 'rb') as src_file, open(os.path.join(self.model_path, "input.ply") , 'wb') as dest_file:

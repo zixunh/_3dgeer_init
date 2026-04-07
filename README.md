@@ -191,8 +191,8 @@ bash ./scripts/train.sh
 | `-m` / `--model_path` | Output directory for checkpoints and logs | `./output/` |
 | `--render_model` | Training projection mode: `BEAP`, `KB`, `EQ`, or `PH` | `BEAP` |
 | `--sample_step` | Ray sampling interval in radians (BEAP/KB) | — |
-| `--fov_mod` | FoV scale factor applied during training | — |
-| `--mask_path` | Path to validity mask PNG (BEAP mode) | — |
+| `--fov_mod` | FoV scale factor applied during training (BEAP mode) | — |
+| `--mask_path` | Path to validity mask PNG | — |
 | `--raymap_path` | Path to per-pixel ray-direction map `.npy` (KB/EQ mode) | — |
 | `--focal_scaling` | Scale factor for focal length (KB/PH modes) | `1.0` |
 | `--distortion_scaling` | Scale factor for distortion coefficients (KB mode; `0` → EQ) | `1.0` |

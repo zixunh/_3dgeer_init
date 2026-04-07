@@ -64,14 +64,15 @@ def loadCam(args, id, cam_info, resolution_scale, is_nerf_synthetic, is_test_dat
 
     return Camera(resolution, colmap_id=cam_info.uid, R=cam_info.R, T=cam_info.T, 
                   FoVx=cam_info.FovX, FoVy=cam_info.FovY, focal_x=cam_info.focal_x, focal_y=cam_info.focal_y,
-                  principal_x=cam_info.principal_x, principal_y=cam_info.principal_y, distortion_coeffs=cam_info.distortion_coeffs,
+                  principal_x=cam_info.principal_x, principal_y=cam_info.principal_y, distortion_coeffs=getattr(cam_info, 'distortion_coeffs', None),
                   depth_params=cam_info.depth_params,
                   image=image, invdepthmap=invdepthmap,
                   image_name=cam_info.image_name, uid=id, step=args.sample_step, data_device=args.data_device,
                   train_test_exp=args.train_test_exp, is_test_dataset=is_test_dataset, is_test_view=cam_info.is_test,
                   render_model=args.render_model, 
                   focal_scaling=args.focal_scaling, distortion_scaling=args.distortion_scaling, mirror_shift=args.mirror_shift,
-                  raymap=args.raymap)
+                  raymap=args.raymap,
+                  intr_width=cam_info.width, intr_height=cam_info.height)
 
 def cameraList_from_camInfos(cam_infos, resolution_scale, args, is_nerf_synthetic, is_test_dataset):
     camera_list = []
