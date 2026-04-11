@@ -1,4 +1,9 @@
 # Data Format Documentation of 3DGEER
+## 0. Extra Dependency
+```
+pip install projectaria-tools==1.6.0
+pip install pycolmap==3.10.0
+```
 ## 1. ScanNet++ Dataset
 Download the dataset following the official [ScanNet++](https://scannetpp.mlsg.cit.tum.de/scannetpp/) instructions.
 ### Expected Directory Structure

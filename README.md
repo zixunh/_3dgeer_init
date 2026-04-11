@@ -108,11 +108,11 @@ The full CUDA implementation can be found here: [./submodules/geer-rasterizer/](
 
 - Bipolar Equiangular Projection: Maintains uniform ray sampling across arbitrary fields of view, thereby providing stable, FoV-invariant supervision for radiance field training.
 
-  <div align="center">
-    <img src="assets/beap.gif" width="60%">
-  </div>
+<div align="center">
+  <img src="assets/beap.gif" width="60%">
+</div>
 
-## 🔧Dependency and Viewer Setup
+## 🔧Dependency
 #### Conda Based Installation
 Following the 3dgs dependencies https://github.com/graphdeco-inria/gaussian-splatting to install the 3dgs environment, and then run the following command to replace the `diff-gaussian-rasterization` for using a geer-version CUDA rasterizer:
 ```sh
@@ -128,6 +128,12 @@ bash ./docker/init_my_docker.sh
 # If you modify algorithm upon our geer-rasterizer, inside docker container, recompile:
 pip install --no-build-isolation ./submodules/geer-rasterizer
 ```
+
+## 🔧Interactive Viewer Setup
+<div align="center">
+  <img src="assets/demo_sibr.gif" width="100%">
+</div>
+
 #### SIBR Viewer Configuration with Docker 
 **⚠️ Important Notice on Visualization:**
 `SIBR_gaussianViewer_app` is currently not supported for Gaussian Exact and Efficient Rendering (GEER).
@@ -153,6 +159,7 @@ $sibr_rg
 ```
 - **For offline visualization**, We recommend using our [`gsplat-geer`](https://github.com/boschresearch/3dgeer/tree/gsplat-geer) implementation, built on top of: https://github.com/nerfstudio-project/gsplat/blob/main/docs/3dgut.md 
 > Note: the mismatched culling issue in UT is resolved using our PBF-based fix.
+
 
 ## 🏃Quick Start
 ### 1. Data Preparation

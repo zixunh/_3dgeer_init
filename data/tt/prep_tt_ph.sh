@@ -50,3 +50,52 @@ echo "Converted binary COLMAP model to text format in $DATA_ROOT/colmap"
 python "$ROOT/prep_tt_ph.py" --path "$DATA_ROOT"
 
 echo "Done. SCNT-formatted dataset ready at: $DATA_ROOT"
+
+
+
+INPUT="$ROOT/datasets/$SCENE/colmap/cameras_fish.txt"
+OUTPUT="$ROOT/datasets/$SCENE/nerfstudio/transforms.json"
+mkdir -p "$(dirname "$OUTPUT")"
+
+while IFS= read -r line; do
+    # 跳过注释或空行
+    if echo "$line" | grep -q '^#'; then
+        continue
+    elif [ -z "$line" ]; then
+        continue
+    else
+        set -- $line  # 用 $1, $2... 自动分字段
+
+        cam_id=$1
+        model=$2
+        width=$3
+        height=$4
+        fx=$5
+        fy=$6
+        cx=$7
+        cy=$8
+        k1=0
+        k2=0
+        k3=0
+        k4=0
+
+        # 输出为 JSON
+        cat <<EOF > "$OUTPUT"
+{
+    "fl_x": $fx,
+    "fl_y": $fy,
+    "cx": $cx,
+    "cy": $cy,
+    "w": $width,
+    "h": $height,
+    "k1": $k1,
+    "k2": $k2,
+    "k3": $k3,
+    "k4": $k4,
+    "camera_model": "OPENCV_FISHEYE"
+}
+EOF
+        echo "Wrote camera model to $OUTPUT"
+        break  # 只取第一个相机
+    fi
+done < "$INPUT"
