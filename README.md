@@ -155,7 +155,7 @@ $sibr_rg
 > Note: the mismatched culling issue in UT is resolved using our PBF-based fix.
 
 <div align="center">
-  <img src="assets/demo_sibr.gif" width="60%">
+  <img src="assets/demo_sibr.gif" width="100%">
 </div>
 
 ## 🏃Quick Start
