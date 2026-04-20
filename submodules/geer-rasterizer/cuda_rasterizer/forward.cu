@@ -1111,7 +1111,12 @@ renderCUDA(
 				C[ch] += features[collected_id[j] * CHANNELS + ch] * alpha * T;
 
 			if(invdepth)
-			expected_invdepth += (1 / depths[collected_id[j]]) * alpha * T;
+			{
+				float d_obj_sq = dot(d_obj, d_obj);
+				float t_ray = dot(d_obj, p_obj) / d_obj_sq;
+				float norm_rayf = norm3df(rayf.x, rayf.y, rayf.z);
+				expected_invdepth += (1.0f / (norm_rayf * t_ray)) * alpha * T;
+			}
 
 			T = test_T;
 
