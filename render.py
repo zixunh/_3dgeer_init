@@ -32,10 +32,12 @@ def render_set(model_path, mask_tensor, name, iteration, views, gaussians, pipel
 
     render_path = os.path.join(model_path, name, "ours_{}".format(iteration), "renders")
     gts_path = os.path.join(model_path, name, "ours_{}".format(iteration), "gt")
+    depth_path = os.path.join(model_path, name, "ours_{}".format(iteration), "depth")
     # asso_path = os.path.join(model_path, name, "ours_{}".format(iteration), "asso")
 
     makedirs(render_path, exist_ok=True)
     makedirs(gts_path, exist_ok=True)
+    makedirs(depth_path, exist_ok=True)
     # makedirs(asso_path, exist_ok=True)
 
     render_times_overall = []
@@ -54,6 +56,7 @@ def render_set(model_path, mask_tensor, name, iteration, views, gaussians, pipel
         render_end = time.time()
 
         rendering = rendering_pkg["render"]
+        depth = rendering_pkg["depth"]
         runtime = rendering_pkg["time"]
         range_len = rendering_pkg["range_len"]  # ranges for each tile
 
@@ -73,6 +76,15 @@ def render_set(model_path, mask_tensor, name, iteration, views, gaussians, pipel
             rendering[mask_tensor == 0] = 0.0
         torchvision.utils.save_image(rendering, os.path.join(render_path, '{0:05d}'.format(idx) + ".png"))
         torchvision.utils.save_image(gt, os.path.join(gts_path, '{0:05d}'.format(idx) + ".png"))
+
+        # Save depth map: normalize inverse-depth to [0, 1] for visualization
+        depth_map = depth.squeeze(0)  # [H, W]
+        max_depth = depth_map.max()
+        if max_depth > 0:
+            depth_normalized = depth_map / max_depth
+        else:
+            depth_normalized = depth_map
+        torchvision.utils.save_image(depth_normalized.unsqueeze(0), os.path.join(depth_path, '{0:05d}'.format(idx) + ".png"))
 
         # grid_size = 16
         # grid_w = int((rendering.shape[2] + grid_size - 1) / grid_size)
