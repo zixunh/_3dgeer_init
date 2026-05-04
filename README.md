@@ -236,15 +236,11 @@ See examples in [detailed train and eval documentation](./scripts).
 
 
 ### 4. Available Checkpoints
-You can download the pre-trained checkpoints for the scenes shown on our project webpage:
-- ScanNet++: Kitchen, Lab, Officeroom, Bedroom
-- ZipNeRF: Alameda, Berlin, London, NYC
-- Aria: Livingroom, Steakhouse, Garden
-- Tank and Temples: Train, Truck
-- Customized Parking: Bosch Center
-
-Download from HuggingFace:
-https://huggingface.co/datasets/ZixunH/3DGEER_ckpt
+You can download our trained checkpoints for the following open dataset:
+- [ScanNet++: Kitchen, Lab, Officeroom, Bedroom, Storage](https://www.dropbox.com/scl/fi/fk28mxew8xt8qpj4mi5ch/scannetpp.zip?rlkey=lcg7g3mvvdw7351ocs1sdxfc2&e=1&st=0skeao82&dl=0)
+- [ZipNeRF: Alameda, Berlin, London, NYC](https://www.dropbox.com/scl/fo/3bbsmmrqkno774e672p7k/ADulNsSAaCZ2RVBQjWlECb0?rlkey=ugdqyf3cja9l8v29jhrbw6ute&e=1&st=t5ht8jmt&dl=0)
+- [Aria: Livingroom, Steakhouse, Garden]()
+- [Tank and Temples: Train, Truck](https://www.dropbox.com/scl/fo/gl4wwzbgwf781o0n836hw/AFONH7H2XsADaJoGPMqRIKY?rlkey=jc5r2jkmzko6cmrs5ax0d5y2r&e=1&st=frfpi268&dl=0)
 
 ## 🙏Special Extension
 <p align="center">
