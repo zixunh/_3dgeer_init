@@ -152,7 +152,7 @@ class GaussianModel:
         if self.active_sh_degree < self.max_sh_degree:
             self.active_sh_degree += 1
 
-    def create_from_pcd(self, pcd : BasicPointCloud, cam_infos : int, spatial_lr_scale : float):
+    def create_from_pcd(self, pcd : BasicPointCloud, cam_infos : int, spatial_lr_scale : float, args=None):
         self.spatial_lr_scale = spatial_lr_scale
         # arr1 = np.asarray(pcd.points)
         # norm = np.linalg.norm(arr1, axis=1)

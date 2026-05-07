@@ -34,7 +34,7 @@ WORKDIR /workspace
 #     pip install opencv-python psutil matplotlib
 
 RUN pip install --upgrade pip && \
-    pip install tqdm plyfile==1.1 opencv-python==4.10.0.84 psutil matplotlib numpy==1.24.3 && \
+    pip install tqdm plyfile==1.1 opencv-python==4.10.0.84 psutil matplotlib numpy==1.24.3 scipy && \
     pip install --no-build-isolation ./3dgs_dependency/simple-knn && \
     pip install --no-build-isolation ./3dgs_dependency/geer-rasterizer
 

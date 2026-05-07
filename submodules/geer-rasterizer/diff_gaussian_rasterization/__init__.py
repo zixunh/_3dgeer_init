@@ -39,6 +39,29 @@ def rasterize_gaussians(
         raster_settings,
     )
 
+def rasterize_tetra_gaussians(
+    tetra_vertices,
+    tetra_indices,
+    colors_precomp,
+    opacities,
+    tetra_eta,
+    tetra_eps,
+):
+    """Native TetraGEER CUDA entrypoint scaffold.
+
+    The production model currently uses the PyTorch tetra-to-Gaussian parity
+    path and then calls rasterize_gaussians. This symbol reserves the native API
+    for the follow-up CUDA implementation without changing the Gaussian path.
+    """
+    return _C.rasterize_tetra_gaussians(
+        tetra_vertices,
+        tetra_indices,
+        colors_precomp,
+        opacities,
+        float(tetra_eta),
+        float(tetra_eps),
+    )
+
 class _RasterizeGaussians(torch.autograd.Function):
     @staticmethod
     def forward(
@@ -236,4 +259,3 @@ class GaussianRasterizer(nn.Module):
             rotations,
             raster_settings, 
         )
-

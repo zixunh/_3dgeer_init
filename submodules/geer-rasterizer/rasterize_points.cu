@@ -254,6 +254,31 @@ RasterizeGaussiansBackwardCUDA(
   return std::make_tuple(dL_dmeans2D, dL_dcolors, dL_dopacity, dL_dmeans3D, dL_dsh, dL_dscales, dL_drotations);
 }
 
+std::tuple<int, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
+RasterizeTetraGaussiansCUDA(
+	const torch::Tensor& tetra_vertices,
+	const torch::Tensor& tetra_indices,
+	const torch::Tensor& colors,
+	const torch::Tensor& opacity,
+	const float tetra_eta,
+	const float tetra_eps)
+{
+  AT_ERROR("Native TetraGEER CUDA forward is scaffolded but not implemented yet. Use the PyTorch tetra-to-Gaussian parity path.");
+}
+
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
+RasterizeTetraGaussiansBackwardCUDA(
+	const torch::Tensor& tetra_vertices,
+	const torch::Tensor& tetra_indices,
+	const torch::Tensor& dL_dmeans3D,
+	const torch::Tensor& dL_dscales,
+	const torch::Tensor& dL_drotations,
+	const float tetra_eta,
+	const float tetra_eps)
+{
+  AT_ERROR("Native TetraGEER CUDA backward is scaffolded but not implemented yet. Use the PyTorch tetra-to-Gaussian parity path.");
+}
+
 torch::Tensor markVisible(
 		torch::Tensor& means3D,
 		torch::Tensor& viewmatrix)

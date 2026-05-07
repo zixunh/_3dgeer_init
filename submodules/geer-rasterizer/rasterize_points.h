@@ -75,6 +75,25 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Te
 	const torch::Tensor& imageBuffer,
 	const bool antialiasing,
 	const bool debug);
+
+std::tuple<int, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
+RasterizeTetraGaussiansCUDA(
+	const torch::Tensor& tetra_vertices,
+	const torch::Tensor& tetra_indices,
+	const torch::Tensor& colors,
+	const torch::Tensor& opacity,
+	const float tetra_eta,
+	const float tetra_eps);
+
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
+RasterizeTetraGaussiansBackwardCUDA(
+	const torch::Tensor& tetra_vertices,
+	const torch::Tensor& tetra_indices,
+	const torch::Tensor& dL_dmeans3D,
+	const torch::Tensor& dL_dscales,
+	const torch::Tensor& dL_drotations,
+	const float tetra_eta,
+	const float tetra_eps);
 		
 torch::Tensor markVisible(
 		torch::Tensor& means3D,

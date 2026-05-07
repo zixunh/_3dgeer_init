@@ -15,7 +15,7 @@ from random import randint
 from utils.loss_utils import l1_loss, ssim
 from gaussian_renderer import render, network_gui
 import sys
-from scene import Scene, GaussianModel
+from scene import Scene, create_scene_model
 from utils.general_utils import safe_state, get_expon_lr_func
 import uuid
 from tqdm import tqdm
@@ -35,7 +35,9 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     os.makedirs('tmp', exist_ok=True)
     first_iter = 0
     tb_writer = prepare_output_and_logger(dataset)
-    gaussians = GaussianModel(dataset.sh_degree)
+    for name in ["tetra_init", "tetra_downsample_voxel", "tetra_eta", "tetra_eps"]:
+        setattr(dataset, name, getattr(opt, name, None))
+    gaussians = create_scene_model(dataset)
 
     dataset.fov_mod = fov_mod
     dataset.sample_step = sample_step
@@ -166,6 +168,10 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             Ll1depth = Ll1depth.item()
         else:
             Ll1depth = 0
+        tetra_stats = {}
+        if hasattr(gaussians, "regularization_loss"):
+            reg_loss, tetra_stats = gaussians.regularization_loss(opt)
+            loss += reg_loss
         loss.backward()
 
         iter_end.record()
@@ -176,13 +182,20 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             ema_Ll1depth_for_log = 0.4 * Ll1depth + 0.6 * ema_Ll1depth_for_log
 
             if iteration % 10 == 0:
-                progress_bar.set_postfix({"Loss": f"{ema_loss_for_log:.{7}f}", "Depth Loss": f"{ema_Ll1depth_for_log:.{7}f}"})
+                postfix = {"Loss": f"{ema_loss_for_log:.{7}f}", "Depth Loss": f"{ema_Ll1depth_for_log:.{7}f}"}
+                if tetra_stats:
+                    postfix["Tets"] = int(tetra_stats["tetra/count"].item())
+                    postfix["Inv"] = int(tetra_stats["tetra/inversion_count"].item())
+                progress_bar.set_postfix(postfix)
                 progress_bar.update(10)
             if iteration == opt.iterations:
                 progress_bar.close()
 
             # Log and save
             training_report(tb_writer, iteration, Ll1, loss, l1_loss, iter_start.elapsed_time(iter_end), testing_iterations, scene, render, (pipe, background), dataset.train_test_exp, valid_mask)
+            if tb_writer and tetra_stats:
+                for key, value in tetra_stats.items():
+                    tb_writer.add_scalar(key, value.item(), iteration)
             if (iteration in saving_iterations):
                 print("\n[ITER {}] Saving Gaussians".format(iteration))
                 scene.save(iteration)

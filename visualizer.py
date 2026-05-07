@@ -16,8 +16,8 @@ import cv2
 import sys
 from argparse import ArgumentParser
 from arguments import ModelParams, PipelineParams, OptimizationParams, get_combined_args
-from gaussian_renderer import render, network_gui, GaussianModel
-from scene import Scene
+from gaussian_renderer import render, network_gui
+from scene import Scene, create_scene_model
 from utils.general_utils import safe_state
 from utils.image_utils import match_mask_to_image
 
@@ -32,7 +32,7 @@ def visualize(dataset, opt, pipe, iteration, sample_step, fov_mod, mask_path,
     training is complete, without performing any gradient updates.
     """
     with torch.no_grad():
-        gaussians = GaussianModel(dataset.sh_degree)
+        gaussians = create_scene_model(dataset)
 
         dataset.fov_mod = fov_mod
         dataset.sample_step = sample_step

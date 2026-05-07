@@ -1,58 +1,44 @@
 <div align="center">
-<h1>[2026 ICLR] 3DGEER: 3D Gaussian Rendering <br> Made Exact and Efficient for Generic Cameras</h1>
+<h1>TetraGEER</h1>
+<h3>Minimal geometrically identifiable structure for under-constrained 3D radiance fields</h3>
 
-[**Zixun Huang**](https://zixunh.github.io/) · [**Cho-Ying Wu**](https://choyingw.github.io/) · [**Yuliang Guo**](https://yuliangguo.github.io/) · [**Xinyu Huang**](https://scholar.google.com/citations?user=cL4bNBwAAAAJ&hl=en) · [**Liu Ren**](https://www.liu-ren.com/)
-
-Bosch Center for AI, Bosch Research North America
-
-<a href="https://arxiv.org/abs/2505.24053"><img src="https://img.shields.io/badge/arXiv-2505.24053-red" alt="arXiv"></a>
-<a href="https://openreview.net/forum?id=4voMNlRWI7"><img src="https://img.shields.io/badge/OpenReview-Top_1%25_Score-orange" alt="OpenReview"></a>
-<a href="https://iclr.cc/virtual/2026/poster/10011512"><img src="https://img.shields.io/badge/ICLR-2026-blue" alt="ICLR 2026"></a>
-<a href="https://zixunh.github.io/3d-geer/"><img src="https://img.shields.io/badge/Project_Page-3DGEER-green" alt="Project Page"></a>
-<a href="https://github.com/boschresearch/3dgeer/tree/gsplat-geer"><img src="https://img.shields.io/badge/gsplat--geer-Extension-purple" alt="Project Page"></a>
-<a href="https://www.youtube.com/watch?v=Grl9jSMIgds"><img src="https://img.shields.io/badge/Video-YouTube-yellow" alt="Video"></a>
+Built on top of <strong>3DGEER</strong>: exact and efficient ray-Gaussian rendering for generic cameras.
 
 <p align="center">
-  <a href='https://zixunh.github.io/3d-geer'>
-  <img src="assets/teaser.gif" alt="teaser" style="width: 100%;">
-  Check Project Page for More Visuals
-  </a>
+  <img src="assets/teaser.gif" alt="3DGEER teaser" style="width: 100%;">
 </p>
 </div>
 
-## 🧐Overview
-<div class="row">
-    <div class="col-md-8 col-md-offset-2">
-        <section>
-            <p>
-              3D Gaussian Splatting (3DGS) has rapidly become one of the most influential paradigms in neural rendering.
-              It delivers impressive real-time performance while maintaining high visual fidelity, making it a strong alternative to NeRF-style volumetric methods.
-              But there is a fundamental problem hiding beneath its success:
-            </p>
-            <blockquote style="font-size: 13px;">
-                <strong>Splatting doesn't obey exactness in projective geometry.</strong>
-            </blockquote>
-            <p>
-              The splatting approximation is usually harmless for narrow field-of-view (FoV) pinhole cameras.
-              However, once we move to fisheye, omnidirectional, or generic camera models — especially those common in augmented reality, robotics and autonomous driving — the approximation error becomes significant.
-            </p>
-          </section>
-    </div>
-</div>
+## Overview
 
-## 😺Key Features
-This repository contains the official authors implementation associated with the [**ICLR 2026**](https://iclr.cc/virtual/2026/poster/10011512) paper "3DGEER: 3D Gaussian Rendering Made Exact and Efficient for Generic Cameras". The `gsplat-geer` OSS extension can be found [here](#special-extension).
-<div class="row">
-    <div class="col-md-8 col-md-offset-2">
-        <section>
-            <ul>
-              <li>Projective <strong>exactness</strong> + Real-time <strong>efficiency</strong></li>
-              <li>Compatibility with generic camera models (pinhole / fisheye) + Strong generalization to <strong>extreme FoV</strong></li>
-              <li>Adaptation to <strong>widely-used</strong> GS frameworks including <code>diff-gaussian-rasterization</code>, <code>gsplat</code>, <code>drivestudio</code></li>; now supports dynamic outdoor scene rendering under wide-FoV fisheye cameras.
-            </ul>
-        </section>
-    </div>
-</div>
+TetraGEER extends the existing 3DGEER codebase with a tetrahedral geometry carrier. Instead of optimizing free Gaussian centers, scales, and rotations directly, TetraGEER initializes a tetrahedral structure from the input point cloud, optimizes shared tetra vertices, and derives Gaussian primitives from each tetrahedron by moment matching.
+
+The current implementation is a dual-mode codebase:
+
+- `--model_type gaussian`: original free-Gaussian 3DGEER behavior.
+- `--model_type tetra`: TetraGEER path with Delaunay tetra initialization and PyTorch tetra-to-Gaussian reparameterization.
+
+The tetra path currently reuses the existing GEER CUDA renderer after deriving Gaussian means, scales, and rotations in PyTorch. Native tetra CUDA entrypoints are scaffolded in `submodules/geer-rasterizer`, but the active training path is the parity implementation.
+
+## Key Features
+
+- Delaunay tetrahedral initialization from COLMAP or scene point clouds.
+- Shared tetra vertex optimization with fixed tetra connectivity for the first working version.
+- Analytic tetra-to-Gaussian moment matching:
+  - mean from tetra vertex average
+  - covariance from centered tetra vertices
+  - scale and rotation from covariance eigendecomposition
+- Per-tetra opacity and spherical-harmonic appearance.
+- Geometry regularizers for Laplacian smoothing, ARAP-style edge preservation, volume barriers, and minimality.
+- Compatibility export to `point_cloud.ply` so existing render/view tools can still consume derived Gaussians.
+
+## Relation to 3DGEER
+
+This repository still contains the 3DGEER renderer and scripts. TetraGEER changes the scene representation, not the default rendering backend. The original 3DGEER project resources remain useful for understanding the GEER CUDA renderer:
+
+- [3DGEER arXiv](https://arxiv.org/abs/2505.24053)
+- [3DGEER project page](https://zixunh.github.io/3d-geer/)
+- [GEER CUDA rasterizer](./submodules/geer-rasterizer/)
 
 <section class="section" id="BibTeX">
   <div class="container is-max-desktop content">
@@ -112,20 +98,35 @@ The full CUDA implementation can be found here: [./submodules/geer-rasterizer/](
   <img src="assets/beap.gif" width="60%">
 </div>
 
-## 🔧Dependency
-#### Conda Based Installation
-Following the 3dgs dependencies https://github.com/graphdeco-inria/gaussian-splatting to install the 3dgs environment, and then run the following command to replace the `diff-gaussian-rasterization` for using a geer-version CUDA rasterizer:
+## Installation
+
+TetraGEER uses the original 3DGEER/3DGS Python stack plus SciPy for CPU Delaunay initialization.
+Run these commands from the `tetrageer` directory.
+
 ```sh
-pip install ./submodules/geer-rasterizer
+conda env create -f environment.yml
+conda activate gaussian_splatting
+pip install --no-build-isolation ./submodules/geer-rasterizer
 ```
-#### Docker Configuration (Recommend)
-Set you data path and 3dgeer codebase path in `./docker/init_my_docker.sh`.
+
+The environment file includes `scipy`. If you are using an existing 3DGEER environment, install it manually:
+
 ```sh
-# Build up 3dgs environments for 3DGEER. Example:
+pip install scipy
+```
+
+### Docker
+
+Set your data path and codebase path in `./docker/init_my_docker.sh`, then build the matching image:
+
+```sh
 bash ./docker/build.sh 4090
-# Reset Docker on Terminal 1
 bash ./docker/init_my_docker.sh
-# If you modify algorithm upon our geer-rasterizer, inside docker container, recompile:
+```
+
+After modifying the GEER rasterizer, rebuild the extension inside the container:
+
+```sh
 pip install --no-build-isolation ./submodules/geer-rasterizer
 ```
 
@@ -161,82 +162,118 @@ $sibr_rg
 > Note: the mismatched culling issue in UT is resolved using our PBF-based fix.
 
 
-## 🏃Quick Start
-### 1. Data Preparation
-Our framework follows the standard COLMAP data structure. For generic cameras (e.g., Fisheye), ensure your `cameras.txt` includes the specific intrinsic parameters. [Link to detailed data format documentation](./data).
+## Quick Start
 
-**Expected Directory Structure**:
-```
-|_./data/scnt
-    |_datasets # e.g., download data into this folder
-        |_1d003b07bd
-        |   |_colmap
-        |   |   |_images.txt
-        |   |   |_points3D.txt
-        |   |   |_cameras.txt
-        |   |   |_...
-        |   |_nerfstudio
-        |   |   |_transforms.json
-        |   |_resized_images
-        |       |_000000.jpg
-        |       |_000001.jpg
-        |       |_...
-        |_e3ecd49e2b
-        |_...
-```
-### 2. Training 3DGEER
-To train 3DGEER on ScanNet++ data in **BEAP mode** (default, recommended):
-```bash
-bash ./scripts/train.sh
+### 1. Prepare data
+
+TetraGEER uses the same scene loaders as 3DGEER. A COLMAP-style scene should contain images and sparse points:
+
+```text
+<scene>
+  images/
+  sparse/0/
+    cameras.bin or cameras.txt
+    images.bin or images.txt
+    points3D.bin or points3D.txt
 ```
 
-**Key training arguments:**
+The point cloud is used twice in tetra mode: first as the scene initialization source, and then as input to CPU Delaunay tetrahedralization.
+
+### 2. Train TetraGEER
+
+Run from the `tetrageer` directory:
+
+```sh
+python train.py \
+  -s <path/to/scene> \
+  -m <path/to/output> \
+  --model_type tetra \
+  --tetra_init delaunay \
+  --tetra_downsample_voxel 0.02 \
+  --render_model BEAP \
+  --iterations 30000
+```
+
+For a small smoke run:
+
+```sh
+python train.py \
+  -s <path/to/scene> \
+  -m ./output/tetrageer_smoke \
+  --model_type tetra \
+  --tetra_downsample_voxel 0.05 \
+  --iterations 1000 \
+  --disable_viewer
+```
+
+Important tetra arguments:
 
 | Argument | Description | Default |
 |---|---|---|
-| `-s` / `--source_path` | Path to the scene dataset directory | — |
-| `-m` / `--model_path` | Output directory for checkpoints and logs | `./output/` |
-| `--render_model` | Training projection mode: `BEAP`, `KB`, `EQ`, or `PH` | `BEAP` |
-| `--sample_step` | Ray sampling interval in radians (BEAP/KB) | — |
-| `--fov_mod` | FoV scale factor applied during training (BEAP mode) | — |
-| `--mask_path` | Path to validity mask PNG | — |
-| `--raymap_path` | Path to per-pixel ray-direction map `.npy` (KB/EQ mode) | — |
-| `--focal_scaling` | Scale factor for focal length (KB/PH modes) | `1.0` |
-| `--distortion_scaling` | Scale factor for distortion coefficients (KB mode; `0` → EQ) | `1.0` |
-| `--mirror_shift` | Mirror-model shift ξ for omnidirectional mapping (KB) | `0.0` |
-| `--iterations` | Total training iterations | `30000` |
+| `--model_type` | `gaussian` for original 3DGEER, `tetra` for TetraGEER | `gaussian` |
+| `--tetra_init` | Tetra initialization method. Currently supports `delaunay` | `delaunay` |
+| `--tetra_downsample_voxel` | Voxel size for point-cloud downsampling before Delaunay. Use larger values for faster initialization | `0.0` |
+| `--tetra_eta` | Covariance scale for tetra-to-Gaussian moment matching | `1.0` |
+| `--tetra_eps` | Covariance diagonal stabilizer | `1e-4` |
+| `--tetra_lap_weight` | Laplacian edge smoothing weight | `0.0` |
+| `--tetra_arap_weight` | Edge-length preservation weight | `0.0` |
+| `--tetra_vol_weight` | Volume barrier weight for inverted/collapsed tetrahedra | `0.0` |
+| `--tetra_min_weight` | Minimality penalty on active tetra opacity/volume | `0.0` |
 
-See [detailed training documentation and examples](./scripts) for BEAP, KB, and PH mode commands.
+Camera/rendering arguments are inherited from 3DGEER:
 
-### 3. Rendering & Evaluation
-To render high-quality images and compute PSNR/SSIM/LPIPS:
-```bash
-bash scripts/render.sh <SCENE_ID> <DATA_ROOT> <CKPT_DIR> <MODE>
-bash scripts/eval.sh <SCENE_ID> <DATA_ROOT> <CKPT_DIR> <MODE>
+| Argument | Description | Default |
+|---|---|---|
+| `--render_model` | Projection mode: `BEAP`, `KB`, `EQ`, or `PH` | `BEAP` |
+| `--sample_step` | Ray sampling interval for BEAP/KB modes | scene/script dependent |
+| `--raymap_path` | Per-pixel ray-direction map for KB/EQ mode | `None` |
+| `--mask_path` | Optional validity mask | `None` |
+
+### 3. Inspect outputs
+
+Each saved iteration writes:
+
+```text
+<output>/point_cloud/iteration_<N>/
+  tetra_state.npz   # native tetra vertices, connectivity, opacity, SH features
+  point_cloud.ply   # derived Gaussian compatibility export
 ```
 
-**Arguments:**
+Use `tetra_state.npz` for TetraGEER-aware training/resume/rendering. Use `point_cloud.ply` when you need compatibility with tools that expect Gaussian checkpoints.
 
-`SCENE_ID` : scene name (e.g. `steakhouse`, `1d003b07bd/dslr`)
+### 4. Render a trained TetraGEER model
 
-`DATA_ROOT` : root directory of the formatted dataset
+Render with the same model type:
 
-`CKPT_DIR` : directory containing the trained model checkpoint
+```sh
+python render.py \
+  -m <path/to/output> \
+  -s <path/to/scene> \
+  --model_type tetra \
+  --iteration -1 \
+  --render_model BEAP
+```
 
-`MODE` : rendering backend, (`BEAP`, `KB` or `PH`)
+To render the compatibility Gaussian export instead, use `--model_type gaussian`; this loads `point_cloud.ply` and bypasses the native tetra state.
 
-> Set `DIST_SCALING` as 0 in the shell to render EQ under KB mode;
-> Enlarge the value of `FOCAL_SCALING` to test extreme large FoV;
-> For fair comparison, we recommend evaluating with `BEAP` mode, which ensures consistent metric computation across different rendering backends.
+### 5. Original 3DGEER mode
 
-**Example:**
-See examples in [detailed train and eval documentation](./scripts).
+The original free-Gaussian path is unchanged:
 
-> Please ensure that the corresponding ground truth is used. For example, evaluating extreme KB images using the original KB images as ground truth is invalid due to mismatched distortion parameters.
+```sh
+python train.py \
+  -s <path/to/scene> \
+  -m <path/to/output> \
+  --model_type gaussian \
+  --render_model BEAP
+```
 
+The existing script wrappers under [scripts](./scripts) still target the original 3DGEER workflow unless you add `--model_type tetra` and tetra options.
 
-### 4. Available Checkpoints
-You can download our trained checkpoints for the following open dataset:
+## Available 3DGEER Checkpoints
+
+The original 3DGEER checkpoints remain useful for renderer comparisons:
+
 - [ScanNet++: Kitchen, Lab, Officeroom, Bedroom, Storage](https://www.dropbox.com/scl/fi/fk28mxew8xt8qpj4mi5ch/scannetpp.zip?rlkey=lcg7g3mvvdw7351ocs1sdxfc2&e=1&st=0skeao82&dl=0)
 - [ZipNeRF: Alameda, Berlin, London, NYC](https://www.dropbox.com/scl/fo/3bbsmmrqkno774e672p7k/ADulNsSAaCZ2RVBQjWlECb0?rlkey=ugdqyf3cja9l8v29jhrbw6ute&e=1&st=t5ht8jmt&dl=0)
 - [Aria: Livingroom, Steakhouse, Garden](https://www.dropbox.com/scl/fo/u3vqri9u0799t8w4xqr27/APNPKlXKih3MQpUoU2jIHAI?rlkey=mria3secffbcaxqwuk3hg2248&st=yk4x06y3&dl=0)

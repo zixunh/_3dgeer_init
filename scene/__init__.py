@@ -15,6 +15,7 @@ import json
 from utils.system_utils import searchForMaxIteration
 from scene.dataset_readers import sceneLoadTypeCallbacks
 from scene.gaussian_model import GaussianModel
+from scene.tetra_gaussian_model import TetraGaussianModel
 from arguments import ModelParams
 from utils.camera_utils import cameraList_from_camInfos, camera_to_JSON, cameraList_from_camInfos_fisheye
 
@@ -41,6 +42,15 @@ def dataset_selector(args):
     if check_scannetpp(args) and (dataset == "AUTO" or dataset == "MVL"):
         return "Mvl"
     assert False, "Could not recognize scene type!"
+
+
+def create_scene_model(args):
+    model_type = getattr(args, "model_type", "gaussian")
+    if model_type == "gaussian":
+        return GaussianModel(args.sh_degree)
+    if model_type == "tetra":
+        return TetraGaussianModel(args.sh_degree)
+    raise ValueError(f"Unknown model_type '{model_type}'. Expected 'gaussian' or 'tetra'.")
 
 
 class Scene:
@@ -104,16 +114,20 @@ class Scene:
                 self.test_cameras[resolution_scale] = cameraList_from_camInfos_fisheye(scene_info.test_cameras, resolution_scale, False, True, args)
         
         if self.loaded_iter:
-            self.gaussians.load_ply(os.path.join(self.model_path,
-                                                           "point_cloud",
-                                                           "iteration_" + str(self.loaded_iter),
-                                                           "point_cloud.ply"), args.train_test_exp)
+            point_cloud_dir = os.path.join(self.model_path, "point_cloud", "iteration_" + str(self.loaded_iter))
+            tetra_path = os.path.join(point_cloud_dir, "tetra_state.npz")
+            if getattr(args, "model_type", "gaussian") == "tetra" and hasattr(self.gaussians, "load_tetra") and os.path.exists(tetra_path):
+                self.gaussians.load_tetra(tetra_path, args.train_test_exp)
+            else:
+                self.gaussians.load_ply(os.path.join(point_cloud_dir, "point_cloud.ply"), args.train_test_exp)
         else:
-            self.gaussians.create_from_pcd(scene_info.point_cloud, scene_info.train_cameras, self.cameras_extent)
+            self.gaussians.create_from_pcd(scene_info.point_cloud, scene_info.train_cameras, self.cameras_extent, args)
 
     def save(self, iteration):
         point_cloud_path = os.path.join(self.model_path, "point_cloud/iteration_{}".format(iteration))
         self.gaussians.save_ply(os.path.join(point_cloud_path, "point_cloud.ply"))
+        if hasattr(self.gaussians, "save_tetra"):
+            self.gaussians.save_tetra(os.path.join(point_cloud_path, "tetra_state.npz"))
         exposure_dict = {
             image_name: self.gaussians.get_exposure_from_name(image_name).detach().cpu().numpy().tolist()
             for image_name in self.gaussians.exposure_mapping

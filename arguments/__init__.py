@@ -54,6 +54,7 @@ class ModelParams(ParamGroup):
         self._resolution = -1
         self._camera_model = "FISHEYE" #FISHEYE/PINHOLE
         self.dataset = "AUTO" #AUTO/COLMAP/BLENDER/SCANNETPP
+        self.model_type = "gaussian" # gaussian/tetra
         self._white_background = False
         self.train_test_exp = False
         self.data_device = "cpu" #"cuda"
@@ -98,6 +99,14 @@ class OptimizationParams(ParamGroup):
         self.depth_l1_weight_init = 0.1
         self.depth_l1_weight_final = 0.01
         self.random_background = False
+        self.tetra_init = "delaunay"
+        self.tetra_downsample_voxel = 0.0
+        self.tetra_eta = 1.0
+        self.tetra_eps = 1e-4
+        self.tetra_lap_weight = 0.0
+        self.tetra_arap_weight = 0.0
+        self.tetra_vol_weight = 0.0
+        self.tetra_min_weight = 0.0
         super().__init__(parser, "Optimization Parameters")
 
 def get_combined_args(parser : ArgumentParser):

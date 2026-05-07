@@ -11,7 +11,7 @@
 
 import time
 import torch
-from scene import Scene
+from scene import Scene, create_scene_model
 import os
 from tqdm import tqdm
 from os import makedirs
@@ -20,7 +20,6 @@ import torchvision
 from utils.general_utils import safe_state
 from argparse import ArgumentParser
 from arguments import ModelParams, PipelineParams, get_combined_args
-from gaussian_renderer import GaussianModel
 from utils.image_utils import psnr
 import numpy as np
 import cv2
@@ -133,7 +132,7 @@ def render_sets(dataset : ModelParams, iteration : int, pipeline : PipelineParam
                 fov_mod: float, sample_step: float, render_model: str, \
                 focal_scaling: float, distortion_scaling: float, mirror_shift: float, raymap_path: str, mask_path: str, near_threshold: float = 0.2, asso_mode: int = 0):
     with torch.no_grad():
-        gaussians = GaussianModel(dataset.sh_degree)
+        gaussians = create_scene_model(dataset)
         dataset.fov_mod = fov_mod
         dataset.sample_step = sample_step
 
@@ -186,6 +185,8 @@ if __name__ == "__main__":
     for k in ["fov_mod", "sample_step", "distortion_scaling", "focal_scaling", "mirror_shift", "raymap_path", "mask_path"]:
         if not hasattr(args, k):
             setattr(args, k, None)
+    if not hasattr(args, "model_type"):
+        setattr(args, "model_type", "gaussian")
     if not hasattr(args, "near_threshold"):
         setattr(args, "near_threshold", 0.2)
     if not hasattr(args, "asso_mode"):
